@@ -1,0 +1,41 @@
+{
+  "_how_to_use": "Update this file by hand once a week. Change 'status', 'level' and 'last_reviewed'. The dashboard shows these notes next to the ships. level must be high, medium or low.",
+  "last_reviewed": "2026-10-25",
+  "zones": [
+    {
+      "name": "Red Sea / Bab el-Mandeb / Suez Canal",
+      "level": "high",
+      "status": "Partly reopening. Some carriers are returning to the Suez routing, but attacks on shipping were still reported in 2026.",
+      "effect": "Ships sent around the Cape of Good Hope instead of through Suez need roughly 10 to 14 extra days from Asia to North Europe. Mixed routings make reported ETAs less reliable.",
+      "source": "https://maritime-executive.com/article/overcapacity-looms-over-container-shipping-as-supply-pressure-mounts"
+    },
+    {
+      "name": "Strait of Hormuz",
+      "level": "high",
+      "status": "Reported closed (BIMCO, September 2026).",
+      "effect": "Cargo to and from the Persian Gulf is cancelled or rerouted. Knock-on effects on vessel schedules and equipment.",
+      "source": "https://maritime-executive.com/article/overcapacity-looms-over-container-shipping-as-supply-pressure-mounts"
+    },
+    {
+      "name": "North European ports (congestion)",
+      "level": "medium",
+      "status": "Carrier schedule reliability fell to 29% in August 2026 (Xeneta).",
+      "effect": "Ships often wait at anchor in the German Bight or off Rotterdam before getting a berth. Expect delays even when the ship sails at normal speed.",
+      "source": "https://maritime-executive.com/article/overcapacity-looms-over-container-shipping-as-supply-pressure-mounts"
+    },
+    {
+      "name": "Strait of Gibraltar",
+      "level": "low",
+      "status": "Normal operations.",
+      "effect": "No extra delay expected.",
+      "source": ""
+    },
+    {
+      "name": "English Channel / Dover Strait",
+      "level": "low",
+      "status": "Normal operations, very heavy traffic.",
+      "effect": "Weather can cause short delays in winter storms.",
+      "source": ""
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# Never upload your API key
+.env
+.streamlit/secrets.toml
+# Python clutter
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+data/*.tmp
+# Personal notes for Claude Code (kept on this Mac only)
+CLAUDE.md

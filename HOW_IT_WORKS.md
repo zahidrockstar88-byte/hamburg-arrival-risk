@@ -90,9 +90,19 @@ AIS only says "cargo ship" (types 70–79). It never says what is on board. So t
 Ships slow down to save fuel, wait for berths and follow tides, so a calculated ETA is a sanity check."
 *(After your first live runs, compare 3 ships with their real arrival and quote the result. Much stronger answer.)*
 
-**"Why not use machine learning?"**
-"Companies like project44 and Kpler do that with years of historical data. For a student project,
-a transparent rule anyone can check is more useful and easier to explain to an operations team."
+**"Did you use machine learning?"**
+"Yes, as an experiment, and I measure it honestly. The GitHub Action saves a snapshot every 3 hours, and git
+keeps every version, so I rebuild which ships were at sea and when they really arrived. A straight-line model
+learns how far off the calculated ETA usually is. I test it with 'leave one ship out': each ship is predicted
+by a model that never saw it. With the first ~24 ships the model was *not* better than the plain calculation
+(about 9 h average error for both), so the dashboard says so and keeps the calculation as the main number.
+It retrains after every collection, so it can improve as data grows. Companies like project44 and Kpler use
+years of history; this shows I understand the method and its limits."
+
+**"Where does the news come from?"**
+"Public RSS feeds from maritime news sites (gCaptain, Splash247, The Loadstar, Hellenic Shipping News).
+I keep headlines that mention a chokepoint, by keyword. I chose no AI on purpose: keyword matching can't
+invent facts, and the reader clicks through to the original article."
 
 **"Why only Hamburg?"**
 "To keep it focused and reliable. Adding ports is easy in the code, but one port done well is better."

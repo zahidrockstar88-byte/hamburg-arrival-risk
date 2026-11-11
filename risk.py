@@ -373,6 +373,9 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
         "Shipping line": container["line"] or "—",
         "Container reason": container["reason"],
         "container_likely": container["likely"],
+        "calc_hours": round(hours_to_go, 2),      # used by the experimental ML estimate (eta_model.py)
+        "stopped": bool(stopped),
+        "calc_eta_utc": calc_eta,
         "Where": route["area"],
         "Distance (nm)": round(total_nm),
         "Speed (kn)": round(sog, 1) if sog is not None else None,

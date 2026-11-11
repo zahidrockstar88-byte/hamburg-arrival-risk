@@ -4,3 +4,5 @@ pydeck==0.9.3
 websockets==17.3
 python-dotenv==1.2.3
 pytest==9.1.1
+numpy==2.5.4
+defusedxml==0.7.1

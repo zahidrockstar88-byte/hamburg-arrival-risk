@@ -9,14 +9,16 @@ Your browser opens the dashboard automatically.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
 import config
-from risk import assess_all, is_bound_for_hamburg, is_cargo_type, parse_time
+from eta_model import load_model, predict_hours
+from news import MAX_AGE_DAYS, latest_headlines
+from risk import assess_all, is_bound_for_hamburg, is_cargo_type, nice_time, parse_time
 from safety import clean_saved_ship, md, safe_link
 
 st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon=":material/anchor:", layout="wide")
@@ -64,6 +66,31 @@ def load_zones() -> dict:
         return json.load(f)
 
 
+@st.cache_data(ttl=3 * 3600, show_spinner=False)
+def cached_headlines() -> tuple[list[dict], list[str]]:
+    """News is downloaded at most every 3 hours, not on every page view."""
+    return latest_headlines()
+
+
+NEWS_DAYS = MAX_AGE_DAYS
+NEWS_KIND_COLOR = {"Conflict / security": "red", "Accident": "red", "Closure": "orange", "Strike": "orange",
+                   "Weather": "blue", "Congestion / delays": "violet", "Route update": "gray"}
+
+
+def news_date(published: datetime) -> str:
+    """'Today', 'Yesterday' or a date like '09 Nov'."""
+    days = (datetime.now(timezone.utc).date() - published.astimezone(timezone.utc).date()).days
+    return "Today" if days == 0 else "Yesterday" if days == 1 else published.strftime("%d %b")
+
+
+def ml_eta(row: dict, model: dict | None) -> str:
+    """The experimental ML estimate for one ship, as text ('—' if there is no model or the ship is arriving)."""
+    if not model or row["Flag"] == "⚪":
+        return "—"
+    predicted = predict_hours(model["coefficients"], row["calc_hours"], row["stopped"])
+    return nice_time(row["calc_eta_utc"] + timedelta(hours=predicted - row["calc_hours"]))
+
+
 def badge(flag: str) -> str:
     """A coloured label for a risk flag, e.g. ':red-badge[Likely late]'. Only fixed words go inside."""
     label, color, _ = RISK_STYLE.get(flag, ("Unknown", "gray", None))
@@ -107,6 +134,9 @@ if not show_arrived:
     rows = [r for r in rows if r["Flag"] != "⚪"]
 if containers_only:
     rows = [r for r in rows if r["container_likely"]]
+model = load_model()
+for r in rows:
+    r["ML ETA (experimental)"] = ml_eta(r, model)
 df = pd.DataFrame(rows)
 
 # ---------------------------------------------------------------------------
@@ -166,7 +196,7 @@ with tab_ships:
     st.subheader("Vessel list")
     table = df.assign(Risk=df["Flag"].map(lambda f: RISK_STYLE[f][0]))
     table_cols = ["Risk", "Status", "Ship", "Container ship?", "Shipping line", "Where", "Distance (nm)",
-                  "Speed (kn)", "Reported ETA", "Calculated ETA", "Difference (h)"]
+                  "Speed (kn)", "Reported ETA", "Calculated ETA", "Difference (h)", "ML ETA (experimental)"]
     risk_colors = {label: TEXT_COLOR[color] for label, color, _ in RISK_STYLE.values()}
     styled = table[table_cols].style.map(
         lambda v: f"color: {risk_colors.get(v, '#1C2733')}; font-weight: 600", subset=["Risk"])
@@ -183,6 +213,9 @@ with tab_ships:
             "Shipping line": st.column_config.TextColumn(
                 help="The carrier that runs the ship, guessed from its name. Container owners and cargo "
                      "owners are not public."),
+            "ML ETA (experimental)": st.column_config.TextColumn(
+                help="A machine-learning correction of the calculated ETA, learned from ships that really "
+                     "arrived. Trained on very little data so far: see Method and limits for its accuracy."),
         },
     )
 
@@ -206,7 +239,8 @@ with tab_ships:
             if detail["Shipping line"] != "—":
                 st.markdown(f"**Shipping line** (guessed from the name)  \n{md(detail['Shipping line'])}")
             st.markdown(f"**Reported ETA** {md(detail['Reported ETA'])}  \n"
-                        f"**Calculated ETA** {md(detail['Calculated ETA'])}")
+                        f"**Calculated ETA** {md(detail['Calculated ETA'])}  \n"
+                        f"**ML ETA** (experimental) {md(detail['ML ETA (experimental)'])}")
         st.caption(f"Destination typed by crew: {md(detail['Destination typed'])} · Speed used: "
                    f"{md(detail['Speed used'])} · Position age: {md(detail['Position age (h)'])} h · "
                    f"MMSI {md(detail['MMSI'])}")
@@ -215,6 +249,28 @@ with tab_ships:
 # Chokepoints
 # ---------------------------------------------------------------------------
 with tab_chokepoints:
+    st.subheader("Disruptions in the news")
+    st.caption(f"Headlines from the last {NEWS_DAYS} days about storms, strikes, closures, congestion, accidents "
+               "and conflict on the way to Hamburg. Matched by keyword from maritime news sites and Google News "
+               "(no AI), refreshed every 3 hours. Click a headline for the full article.")
+    headlines, failed_feeds = cached_headlines()
+    groups = [("near", "Near Hamburg: can delay ships arriving in the next days"),
+              ("route", "Further along the route")]
+    for where, heading in groups:
+        st.markdown(f"**{heading}**")
+        group = [h for h in headlines if h["where"] == where]
+        if not group:
+            st.caption("Nothing reported.")
+        for h in group:
+            # Headlines come from the internet: escaped with md(), links checked by safe_link() in news.py.
+            color = NEWS_KIND_COLOR.get(h["kind"], "gray")
+            st.markdown(f":{color}-badge[{md(h['kind'])}] :gray-badge[{md(h['place'])}] &nbsp; "
+                        f"[{md(h['title'])}]({h['link']})")
+            st.caption(f"{md(h['source'])} · {md(news_date(h['published']))}")
+    if failed_feeds:
+        st.caption(f"Could not reach: {md(', '.join(failed_feeds))}.")
+
+    st.subheader("Chokepoint notes")
     zones = load_zones()
     reviewed = datetime.fromisoformat(zones["last_reviewed"]).replace(tzinfo=timezone.utc)
     age_days = (now - reviewed).days
@@ -250,7 +306,30 @@ with tab_method:
    with a container line's word (for example `MSC`, `MAERSK`, `CMA CGM`, `EVER`), or when a ship is moored
    at a Hamburg container terminal (Waltershof, Altenwerder, Tollerort). The table shows which clue was used.
    The **shipping line comes only from the name**; a berth tells us it is a container ship, not whose.
+7. **News** in the Chokepoints tab: headlines from maritime news sites and Google News (English and German).
+   A headline is kept only if it names a place on the way to Hamburg **and** a disruption (storm, strike,
+   closure, congestion, accident, attack), from the last 7 days. Plain keyword matching, no AI, so nothing is
+   invented.
 """)
+        st.subheader("Experimental ML estimate")
+        if model:
+            a, b, c = model["coefficients"]
+            better = (model["model_mae_h"] is not None and model["calculated_mae_h"] is not None
+                      and model["model_mae_h"] < model["calculated_mae_h"])
+            st.markdown(
+                f"A straight-line model learned from **{model['ships']} ships** ({model['examples']} examples) "
+                f"that we saw at sea and later saw arriving, across {model['snapshots']} data snapshots:  \n"
+                f"real hours ≈ {a:.2f} × calculated hours + {b:.1f} if stopped + {c:.1f}")
+            st.markdown(
+                f"Tested fairly (each ship predicted by a model that never saw it), the average error is "
+                f"**{model['model_mae_h']} h** for the model and **{model['calculated_mae_h']} h** for the plain "
+                f"calculated ETA. " + ("The model is currently a little more accurate." if better else
+                                       "**The model is not more accurate yet**, so trust the calculated ETA."))
+            st.caption(f"Retrained automatically after each data collection. Last trained "
+                       f"{md(model['trained_utc'][:16].replace('T', ' '))} UTC. Arrival times are only known to "
+                       f"within ~3 hours (the gap between snapshots), so expect this to improve slowly.")
+        else:
+            st.markdown("Not enough ships have been seen arriving yet to train a model.")
     with limits:
         st.subheader("Limits")
         st.markdown("""
@@ -268,6 +347,9 @@ with tab_method:
   AIS never carries this information.
 - Ship names and destinations are typed by crews and can contain anything, so the dashboard shows them as
   plain text only.
+- The **ML ETA is experimental** and trained on very little data. It is shown for learning, not for planning.
+- News matching is by keyword, so it can miss stories or include loosely related ones. Headlines belong to
+  the news sites; we only link to them.
 """)
 
 # ---------------------------------------------------------------------------

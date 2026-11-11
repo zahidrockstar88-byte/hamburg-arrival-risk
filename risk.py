@@ -318,7 +318,8 @@ def container_guess(ship: dict) -> dict:
 #   🔴 Likely late   🟡 Check (Waiting, No ETA, Data too old)   🟢 On track
 #   ⚫ In another port (moored elsewhere, working cargo: normal)   ⚪ Arriving (final approach)   🔵 Arrived (moored in Hamburg)
 FLAG_ORDER = {"🔴": 0, "🟡": 1, "🟢": 2, "⚫": 3, "⚪": 4, "🔵": 5}
-ARRIVAL_FLAGS = ("⚪", "🔵")      # ships at or very close to Hamburg: nothing left to judge
+LIKELY_LATE, ARRIVED, IN_ANOTHER_PORT = "🔴", "🔵", "⚫"
+ARRIVAL_FLAGS = ("⚪", ARRIVED)   # ships at or very close to Hamburg: nothing left to judge
 NO_ETA_TO_JUDGE = ARRIVAL_FLAGS + ("⚫",)   # ...plus ships still in another port (departure time unknown)
 CHART_FLAGS = ("🔴", "🟡", "🟢", "⚫")      # ships still to come, shown on the approach chart
 
@@ -410,7 +411,6 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
         "stopped": bool(stopped),
         "calc_eta_utc": calc_eta,
         "length_m": ship.get("length_m"),          # ship size, for unloading and delay-cost estimates
-        "draught_m": ship.get("draught_m"),
         "Where": route["area"],
         "Distance (nm)": round(total_nm),
         "Speed (kn)": round(sog, 1) if sog is not None else None,

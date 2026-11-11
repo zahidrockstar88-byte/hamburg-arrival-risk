@@ -29,10 +29,12 @@ sanity check catches the unrealistic ones early.
    leave-one-ship-out. Its measured error is shown next to the plain calculation's
    ([eta_model.py](eta_model.py)).
 
-9. **Carrier scorecard** (procurement view): rebuilds real arrivals from the saved history and shows which
-   shipping lines berth within a day of the ETA they first reported ([history.py](history.py)).
-10. **After the berth**: estimates unloading time, when containers are ready for pickup and when they could
-    reach your warehouse, as ranges from stated assumptions ([operations.py](operations.py)).
+9. **Shipping-line scorecard** (procurement view): rebuilds real arrivals of cargo ships from the saved
+   history and shows which shipping lines berth within a day of the ETA they first reported
+   ([history.py](history.py)).
+10. **After the berth**: estimates unloading time, when containers are ready for pickup, when they could
+    leave by train or reach your warehouse by truck, as ranges from stated assumptions
+    ([operations.py](operations.py)).
 11. **Cost of delay**: ship time from the New ConTex charter index plus the capital tied up in delayed cargo
     (Sea-Intelligence benchmark), in US dollars, as low–high ranges.
 
@@ -84,7 +86,7 @@ Python · Streamlit · pydeck · NumPy · AISStream.io websocket API · RSS (def
 - The ML ETA is experimental: it is trained on few arrivals, and arrival times are only known to within the
   ~3 hours between snapshots. The dashboard shows its measured error and keeps the calculated ETA as the main number.
 - News is matched by keyword, so it can miss stories or include loosely related ones.
-- Carrier scores are measured against the ETA a ship reported when we first saw it (usually a day or two out),
+- Shipping-line scores are measured against the ETA a ship reported when we first saw it (usually a day or two out),
   not the published schedule, so they are higher than industry reliability reports. Few arrivals per line so far.
 - Unloading times and delay costs are estimates from published averages and stated assumptions (see
   `config.py`), not terminal or contract data.

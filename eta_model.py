@@ -38,7 +38,7 @@ import numpy as np
 
 import config
 from risk import ARRIVAL_FLAGS, NO_ETA_TO_JUDGE, parse_time
-from history import collect_sightings, load_snapshots_from_git   # noqa: F401 (shared with history.py)
+from history import collect_sightings, load_snapshots_from_git   # shared with history.py
 
 MODEL_FILE = config.PROJECT_DIR / "model" / "eta_model.json"
 MIN_SHIPS_TO_TRAIN = 10        # below this, we don't train at all

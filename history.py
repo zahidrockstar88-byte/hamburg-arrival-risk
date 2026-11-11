@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import config
-from risk import ARRIVAL_FLAGS, assess_ship, parse_ais_eta, parse_time, shipping_line
+from risk import ARRIVAL_FLAGS, ARRIVED, assess_ship, is_cargo_type, parse_ais_eta, parse_time, shipping_line
 from safety import clean_ais_text, clean_saved_ship, to_float
 
 ARRIVALS_FILE = config.DATA_DIR / "arrivals.json"
@@ -78,7 +78,7 @@ def build_arrivals(snapshots: list[dict]) -> list[dict]:
     arrivals = []
     for mmsi, by_time in collect_sightings(snapshots).items():
         times = sorted(by_time)
-        arrived_by = next((t for t in times if by_time[t][0]["Flag"] == "🔵"), None)
+        arrived_by = next((t for t in times if by_time[t][0]["Flag"] == ARRIVED), None)
         if arrived_by is None:
             continue
         under_way = [t for t in times if t < arrived_by and by_time[t][0]["Flag"] not in ARRIVAL_FLAGS]
@@ -88,6 +88,8 @@ def build_arrivals(snapshots: list[dict]) -> list[dict]:
         first_seen = under_way[0]
         first_ship = by_time[first_seen][1]
         moored_ship = by_time[arrived_by][1]
+        if is_cargo_type(moored_ship.get("ship_type")) is False:
+            continue                       # tugs, ferries, tankers...: not what a shipper books (unknown type kept)
         line = shipping_line(moored_ship.get("name") or first_ship.get("name"))
         promised = parse_ais_eta(first_ship.get("eta"), first_seen)
         arrivals.append({
@@ -102,39 +104,53 @@ def build_arrivals(snapshots: list[dict]) -> list[dict]:
     return sorted(arrivals, key=lambda a: a["arrived_by"])
 
 
-def judge(arrival: dict, tolerance_h: float = config.ON_TIME_TOLERANCE_HOURS) -> str:
+ON_TIME, LATE, EARLY, UNCLEAR, NO_ETA = "On time", "Late", "Early", "Unclear", "No ETA"
+JUDGED = (ON_TIME, LATE, EARLY)
+
+
+def _promise_and_window(arrival: dict):
+    """The promised ETA and the berthing window (after, by) as times, or None when any is missing."""
+    promised = parse_time(arrival.get("promised_eta"))
+    after, by = parse_time(arrival.get("arrived_after")), parse_time(arrival.get("arrived_by"))
+    if promised is None or after is None or by is None:
+        return None
+    return promised, after, by
+
+
+def judge(arrival: dict) -> str:
     """
     On time, Late, Early, Unclear (the berthing window straddles the limit) or No ETA.
     Late  = it can't have berthed before promised + tolerance.
     Early = it berthed before promised - tolerance for sure.
     """
-    promised = parse_time(arrival.get("promised_eta"))
-    after, by = parse_time(arrival.get("arrived_after")), parse_time(arrival.get("arrived_by"))
-    if promised is None or after is None or by is None:
-        return "No ETA"
-    hours_after = (after - promised).total_seconds() / 3600      # earliest possible lateness
-    hours_by = (by - promised).total_seconds() / 3600            # latest possible lateness
-    if hours_after > tolerance_h:
-        return "Late"
-    if hours_by < -tolerance_h:
-        return "Early"
-    if -tolerance_h <= hours_after and hours_by <= tolerance_h:
-        return "On time"
-    return "Unclear"
+    times = _promise_and_window(arrival)
+    if times is None:
+        return NO_ETA
+    promised, after, by = times
+    tolerance = config.ON_TIME_TOLERANCE_HOURS
+    earliest_lateness = (after - promised).total_seconds() / 3600
+    latest_lateness = (by - promised).total_seconds() / 3600
+    if earliest_lateness > tolerance:
+        return LATE
+    if latest_lateness < -tolerance:
+        return EARLY
+    if -tolerance <= earliest_lateness and latest_lateness <= tolerance:
+        return ON_TIME
+    return UNCLEAR
 
 
 def delay_hours(arrival: dict) -> float | None:
     """Best estimate of how late (+) or early (-) the ship berthed: the middle of the window."""
-    promised = parse_time(arrival.get("promised_eta"))
-    after, by = parse_time(arrival.get("arrived_after")), parse_time(arrival.get("arrived_by"))
-    if promised is None or after is None or by is None:
+    times = _promise_and_window(arrival)
+    if times is None:
         return None
+    promised, after, by = times
     middle = after + (by - after) / 2
     return (middle - promised).total_seconds() / 3600
 
 
 # ---------------------------------------------------------------------------
-# 3. Carrier scorecard
+# 3. Shipping-line scorecard
 # ---------------------------------------------------------------------------
 def scorecard(arrivals: list[dict]) -> list[dict]:
     """
@@ -147,17 +163,18 @@ def scorecard(arrivals: list[dict]) -> list[dict]:
     rows = []
     for line, group in groups.items():
         verdicts = [judge(a) for a in group]
-        judged = sum(v in ("On time", "Late", "Early") for v in verdicts)
+        judged = sum(v in JUDGED for v in verdicts)
         delays = [d for d in (delay_hours(a) for a in group) if d is not None]
-        on_time = verdicts.count("On time")
+        on_time = verdicts.count(ON_TIME)
         rows.append({
             "Shipping line": line,
             "Arrivals": len(group),
+            "Judged": judged,
             "On time": on_time,
-            "Late": verdicts.count("Late"),
-            "Early": verdicts.count("Early"),
-            "Unclear": verdicts.count("Unclear") + verdicts.count("No ETA"),
-            "Reliability": (on_time / judged) if judged >= config.MIN_ARRIVALS_FOR_SCORE else None,
+            "Late": verdicts.count(LATE),
+            "Early": verdicts.count(EARLY),
+            "Unclear": verdicts.count(UNCLEAR) + verdicts.count(NO_ETA),
+            "Schedule reliability": (on_time / judged) if judged >= config.MIN_ARRIVALS_FOR_SCORE else None,
             "Average delay (h)": round(sum(delays) / len(delays), 1) if delays else None,
         })
     first, rest = rows[0], sorted(rows[1:], key=lambda r: (r["Shipping line"] == OTHER_LINE, -r["Arrivals"]))
@@ -182,8 +199,10 @@ def load_arrivals(path: Path = ARRIVALS_FILE) -> tuple[list[dict], datetime | No
     for record in records if isinstance(records, list) else []:
         if not isinstance(record, dict):
             continue
-        times = {key: parse_time(record.get(key)) if isinstance(record.get(key), str) else None
-                 for key in ("first_seen", "promised_eta", "arrived_after", "arrived_by")}
+        times = {}
+        for key in ("first_seen", "promised_eta", "arrived_after", "arrived_by"):
+            value = record.get(key)
+            times[key] = parse_time(value) if isinstance(value, str) else None      # text that isn't a time -> None
         if not (times["arrived_after"] and times["arrived_by"] and times["arrived_after"] <= times["arrived_by"]):
             continue
         line = record.get("line") if isinstance(record.get("line"), str) else OTHER_LINE
@@ -206,8 +225,9 @@ def main() -> None:
         json.dump(payload, f, indent=1)
     print(f"Arrivals rebuilt from git history: {len(arrivals)}")
     for row in scorecard(arrivals):
-        score = f"{row['Reliability']:.0%}" if row["Reliability"] is not None else "not enough data"
-        print(f"  {row['Shipping line']}: {row['Arrivals']} arrival(s), reliability {score}")
+        score = (f"{row['Schedule reliability']:.0%}" if row["Schedule reliability"] is not None
+                 else "not enough judged arrivals")
+        print(f"  {row['Shipping line']}: {row['Arrivals']} arrival(s), schedule reliability {score}")
 
 
 if __name__ == "__main__":

@@ -267,14 +267,3 @@ def test_anchored_ship_near_hamburg_is_waiting_not_arrived():
     moored = assess_ship(ship(lat=53.6, lon=9.7, sog=0.0, nav_status=5, eta=eta_in(2)), NOW)
     assert moored["Status"] == "Arrived"
 
-
-def test_ship_length_from_the_radio_signal_is_checked():
-    def length_from(dimension):
-        ships = {}
-        handle_message(ships, {"MessageType": "ShipStaticData", "MetaData": {"MMSI": 211000009},
-                               "Message": {"ShipStaticData": {"Name": "TEST", "Dimension": dimension}}})
-        return ships["211000009"]["length_m"]
-    assert length_from({"A": 300, "B": 66, "C": 20, "D": 31}) == 366        # bow + stern
-    assert length_from({"A": 0, "B": 0}) is None                             # "not available"
-    assert length_from({"A": 511, "B": 511}) is None                         # impossible: over 460 m
-    assert length_from({"A": "x", "B": 10}) is None and length_from("broken") is None

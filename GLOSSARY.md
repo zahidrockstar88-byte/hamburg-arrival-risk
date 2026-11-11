@@ -82,9 +82,9 @@ release.
 _Avoid_: Discharge time (that's when it leaves the ship)
 
 **Delay cost**:
-The estimated cost of a ship berthing later than promised: the ship's time plus the capital tied up in its
-Hamburg cargo.
-_Avoid_: Demurrage (a separate fee that starts only after unloading)
+The estimated cost of a ship that is likely to berth later than the ETA its crew reports now: the ship's time
+plus the capital tied up in its Hamburg cargo.
+_Avoid_: Demurrage, detention (fees for containers left at the terminal or returned late, after unloading)
 
 ## Risk
 

@@ -1,31 +1,33 @@
-# Look and feel of the dashboard. Colours: deep harbour blue on warm off-white paper.
+# Look and feel, taken from a nautical chart of the Elbe:
+# chart white paper, fairway navy ink, and the river's buoy colours used only for risk
+# (red can = likely late, yellow special mark = check, green cone = on track).
 [theme]
 base = "light"
-primaryColor = "#0E4D64"
-backgroundColor = "#FAF8F4"
-secondaryBackgroundColor = "#F1EEE7"
-textColor = "#1C2733"
-linkColor = "#0E4D64"
-borderColor = "#E2DDD2"
+primaryColor = "#12324A"            # fairway navy
+backgroundColor = "#F4F8F9"         # chart white
+secondaryBackgroundColor = "#E3EEF2"   # shallow-water tint
+textColor = "#12324A"
+linkColor = "#0F5C80"
+borderColor = "#C9DAE1"
 showWidgetBorder = true
-baseRadius = "4px"
-font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
-headingFont = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
-codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+baseRadius = "3px"
+font = "Barlow:https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap"
+headingFont = "Barlow Condensed:https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&display=swap"
+headingFontSizes = ["2.75rem", "1.6rem", "1.3rem", "1.1rem", "1rem", "0.9rem"]
 headingFontWeights = [600, 600, 600, 500, 500, 500]
-metricValueFontWeight = 500
-redColor = "#B42318"
-orangeColor = "#B54708"
-yellowColor = "#B88A00"
-greenColor = "#2E7D4F"
-blueColor = "#0E4D64"
+baseFontSize = 16
+redColor = "#C1272D"                # port-hand buoy
+greenColor = "#00866E"              # starboard-hand buoy
+yellowColor = "#E0A800"             # special mark
+orangeColor = "#8A6100"             # yellow made dark enough to read as text
+blueColor = "#0F5C80"
+grayColor = "#5E7180"
 
 [theme.sidebar]
-backgroundColor = "#0F2A3A"
-secondaryBackgroundColor = "#17394D"
-textColor = "#E6EDF2"
-borderColor = "#24495E"
-primaryColor = "#7FC4D6"
+backgroundColor = "#E3EEF2"
+secondaryBackgroundColor = "#F4F8F9"
+textColor = "#12324A"
+borderColor = "#C9DAE1"
 
 [client]
 toolbarMode = "minimal"     # hides the developer menu for visitors

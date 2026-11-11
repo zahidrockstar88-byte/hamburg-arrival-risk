@@ -21,7 +21,17 @@ import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
-import config
+# Streamlit re-runs app.py after every upload but can keep OLD copies of our helper files in memory, which once
+# broke the live site ("ImportError" for a name that only exists in the new risk.py). So reload our own files
+# first, in the order they depend on each other. Outside libraries (streamlit, pandas...) are not touched.
+import importlib  # noqa: E402
+import sys  # noqa: E402
+
+for _module in ("config", "safety", "risk", "news", "history", "operations", "eta_model"):
+    if _module in sys.modules:
+        importlib.reload(sys.modules[_module])
+
+import config  # noqa: E402
 from eta_model import load_model, ml_eta_for
 from history import OTHER_LINE, judge, load_arrivals, scorecard
 from news import MAX_AGE_DAYS, latest_headlines

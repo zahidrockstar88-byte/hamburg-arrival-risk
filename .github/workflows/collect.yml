@@ -41,11 +41,13 @@ jobs:
           git add data/ships.json
           git commit -m "Update live ship data" || echo "No changes"
       - name: Retrain the experimental ML model on all snapshots
+        continue-on-error: true     # if training fails, still upload the new ship data below
         run: |
           python eta_model.py
           git add model/eta_model.json
           git commit -m "Retrain ETA model" || echo "No changes"
       - name: Upload
+        if: always()
         run: |
           git pull --rebase    # pick up any code changes pushed while we were collecting
           git push

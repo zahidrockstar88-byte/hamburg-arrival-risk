@@ -78,3 +78,15 @@ def test_clean_title():
     assert clean_title("A\x00B\n  C") == "A B C"
     assert len(clean_title("x" * 500)) == 200
     assert clean_title(None) == ""
+
+
+def test_city_news_is_not_a_shipping_disruption():
+    # Examples from the code review: they name Hamburg or the Elbe but are not about ships.
+    for headline in ["Hamburg Airport strike cancels 200 flights", "Bus drivers strike in Hamburg",
+                     "Elbe flood hits Dresden old town", "Ice hockey: Hamburg Freezers win",
+                     "Red Sea coral reef study published"]:
+        assert classify(headline) is None, headline
+    # Real disruptions are still kept.
+    assert classify("Houthi missile attack in the Red Sea") is not None          # attack in a conflict zone
+    assert classify("Warnstreik im Hamburger Hafen")["kind"] == "Strike"          # maritime place word
+    assert classify("Head-on collision of two cargo ships blocks the Kiel Canal")["place"] == "Kiel Canal"

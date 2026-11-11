@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -158,18 +158,48 @@ def train(snapshots: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 # 4. Saving and loading
 # ---------------------------------------------------------------------------
+def _number_or_none(value):
+    """A real number (not True/False), or None."""
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
 def load_model(path: Path = MODEL_FILE) -> dict | None:
-    """Read the saved model, or None if it is missing, broken, or was not trained."""
+    """
+    Read the saved model, or None if it is missing, broken, or was not trained.
+    The file is written by a bot from radio data, so every value is checked before the page shows it.
+    """
     try:
         with open(path, encoding="utf-8") as f:
-            model = json.load(f)
+            saved = json.load(f)
     except (OSError, ValueError):
         return None
-    coefficients = model.get("coefficients")
-    if not (isinstance(coefficients, list) and len(coefficients) == 3
-            and all(isinstance(c, (int, float)) for c in coefficients)):
+    if not isinstance(saved, dict):
         return None
-    return model
+    coefficients = saved.get("coefficients")
+    if not (isinstance(coefficients, list) and len(coefficients) == 3
+            and all(_number_or_none(c) is not None for c in coefficients)):
+        return None
+    trained = parse_time(saved.get("trained_utc")) if isinstance(saved.get("trained_utc"), str) else None
+    return {
+        "coefficients": [float(c) for c in coefficients],
+        "ships": int(_number_or_none(saved.get("ships")) or 0),
+        "examples": int(_number_or_none(saved.get("examples")) or 0),
+        "snapshots": int(_number_or_none(saved.get("snapshots")) or 0),
+        "model_mae_h": _number_or_none(saved.get("model_mae_h")),
+        "calculated_mae_h": _number_or_none(saved.get("calculated_mae_h")),
+        "trained_utc": trained,
+    }
+
+
+def ml_eta_for(row: dict, model: dict | None) -> datetime | None:
+    """
+    The experimental ML ETA for one dashboard row, or None when there is no model or nothing to estimate
+    (the ship is arriving, has arrived, or is still in another port with an unknown departure time).
+    """
+    if not model or row["Flag"] in ARRIVAL_FLAGS or row["Flag"] == "⚫":
+        return None
+    predicted = predict_hours(model["coefficients"], row["calc_hours"], row["stopped"])
+    return row["calc_eta_utc"] + timedelta(hours=predicted - row["calc_hours"])
 
 
 def main() -> None:

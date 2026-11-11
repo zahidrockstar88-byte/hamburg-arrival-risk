@@ -11,7 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from eta_model import build_examples, fit, leave_one_ship_out, load_model, predict_hours, train  # noqa: E402
+from eta_model import (build_examples, fit, leave_one_ship_out, load_model, ml_eta_for,  # noqa: E402
+                       predict_hours, train)
 
 T0 = datetime(2026, 11, 9, 0, 0, tzinfo=timezone.utc)
 
@@ -82,3 +83,24 @@ def test_passing_within_15_nm_is_not_an_arrival():
     moored = snapshot([ship("211000004", 53.54, 9.97, T0 + timedelta(hours=10), sog=0)])
     examples = build_examples([at_sea, approaching, moored])
     assert [e["actual_hours"] for e in examples] == [10.0]     # the approaching sighting is not a training example
+
+
+def test_model_file_values_are_checked(tmp_path):
+    # The file is written by a bot: text where numbers belong must never reach the page.
+    path = tmp_path / "eta_model.json"
+    path.write_text(json.dumps({"coefficients": [1.0, 2.0, 3.0], "ships": "[CLICK](HTTP://X.CO)",
+                                "examples": True, "model_mae_h": "5", "calculated_mae_h": 8.4,
+                                "trained_utc": "not a date"}))
+    model = load_model(path)
+    assert model["ships"] == 0 and model["examples"] == 0
+    assert model["model_mae_h"] is None and model["calculated_mae_h"] == 8.4
+    assert model["trained_utc"] is None
+
+
+def test_ml_eta_only_for_ships_still_on_their_way():
+    model = {"coefficients": [1.0, 0.0, 2.0]}                     # "real hours = calculated + 2"
+    row = {"Flag": "🟢", "calc_hours": 10.0, "stopped": False, "calc_eta_utc": T0}
+    assert ml_eta_for(row, model) == T0 + timedelta(hours=2)
+    for flag in ("⚪", "🔵", "⚫"):                                # arriving, arrived, in another port
+        assert ml_eta_for({**row, "Flag": flag}, model) is None
+    assert ml_eta_for(row, None) is None

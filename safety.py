@@ -24,6 +24,15 @@ _AIS_ALLOWED = re.compile(r"[^A-Z0-9 !\"#$%&'()*+,\-./:;<=>?@\[\\\]^_]")
 MAX_LEN = {"name": 20, "destination": 20, "callsign": 7}
 
 
+def clean_plain_text(value, max_length: int) -> str:
+    """Any outside text as one plain line: no invisible control characters, single spaces, limited length."""
+    if not isinstance(value, str):
+        return ""
+    text = re.sub(r"[\x00-\x1f\x7f]", " ", value)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:max_length].strip()
+
+
 def clean_ais_text(value, field: str = "name") -> str:
     """Return safe AIS text: allowed characters only, single spaces, official max length."""
     if not isinstance(value, str):

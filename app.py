@@ -9,14 +9,14 @@ Your browser opens the dashboard automatically.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
 import config
-from eta_model import load_model, predict_hours
+from eta_model import load_model, ml_eta_for
 from news import MAX_AGE_DAYS, latest_headlines
 from risk import ARRIVAL_FLAGS, assess_all, is_bound_for_hamburg, is_cargo_type, nice_time, parse_time
 from safety import clean_saved_ship, md, safe_link
@@ -75,23 +75,29 @@ def cached_headlines() -> tuple[list[dict], list[str]]:
     return latest_headlines()
 
 
-NEWS_DAYS = MAX_AGE_DAYS
 NEWS_KIND_COLOR = {"Conflict / security": "red", "Accident": "red", "Closure": "orange", "Strike": "orange",
                    "Weather": "blue", "Congestion / delays": "violet", "Route update": "gray"}
 
 
 def news_date(published: datetime) -> str:
     """'Today', 'Yesterday' or a date like '09 Nov'."""
-    days = (datetime.now(timezone.utc).date() - published.astimezone(timezone.utc).date()).days
-    return "Today" if days == 0 else "Yesterday" if days == 1 else published.strftime("%d %b")
+    days_ago = (datetime.now(timezone.utc).date() - published.astimezone(timezone.utc).date()).days
+    if days_ago == 0:
+        return "Today"
+    if days_ago == 1:
+        return "Yesterday"
+    return published.strftime("%d %b")
 
 
-def ml_eta(row: dict, model: dict | None) -> str:
-    """The experimental ML estimate for one ship, as text ('—' if there is no model or the ship is arriving)."""
-    if not model or row["Flag"] in ARRIVAL_FLAGS or row["Flag"] == "⚫":
-        return "—"          # already there, or still in another port (departure time unknown)
-    predicted = predict_hours(model["coefficients"], row["calc_hours"], row["stopped"])
-    return nice_time(row["calc_eta_utc"] + timedelta(hours=predicted - row["calc_hours"]))
+def ml_accuracy(model: dict | None) -> str:
+    """One line comparing the ML ETA's measured error with the calculated ETA's, shown wherever ML ETAs appear."""
+    if not model or model["model_mae_h"] is None or model["calculated_mae_h"] is None:
+        return "ML ETA: not enough arrivals yet to measure its accuracy."
+    verdict = ("more accurate" if model["model_mae_h"] < model["calculated_mae_h"]
+               else "not more accurate yet, so trust the calculated ETA")
+    return (f"ML ETA (experimental): average error {model['model_mae_h']:.1f} h, against "
+            f"{model['calculated_mae_h']:.1f} h for the calculated ETA ({verdict}). "
+            f"Learned from {model['ships']} ships.")
 
 
 def badge(flag: str) -> str:
@@ -139,7 +145,7 @@ if containers_only:
     rows = [r for r in rows if r["container_likely"]]
 model = load_model()
 for r in rows:
-    r["ML ETA (experimental)"] = ml_eta(r, model)
+    r["ML ETA (experimental)"] = nice_time(ml_eta_for(r, model))      # "—" when there is none
 df = pd.DataFrame(rows)
 
 # ---------------------------------------------------------------------------
@@ -222,6 +228,8 @@ with tab_ships:
         },
     )
 
+    st.caption(md(ml_accuracy(model)))
+
     st.subheader("Vessel detail")
     # Ship names can repeat, so we pick by row number and show the MMSI to tell them apart.
     choice = st.selectbox("Choose a vessel", range(len(df)), label_visibility="collapsed",
@@ -237,13 +245,14 @@ with tab_ships:
             st.markdown(f"**Route ahead**  \n{md(detail['Route ahead'])}")
             st.markdown(f"**Where it came from**  \n{md(detail['Route note'])}")
         with right:
-            verdict = detail["Container ship?"].split(" · ")[0]     # "Likely", "Unknown" or "Unlikely"
-            st.markdown(f"**Container ship?**  \n{md(verdict)}. {md(detail['Container reason'])}")
+            st.markdown(f"**Container ship?**  \n{md(detail['Container verdict'])}. "
+                        f"{md(detail['Container reason'])}")
             if detail["Shipping line"] != "—":
                 st.markdown(f"**Shipping line** (guessed from the name)  \n{md(detail['Shipping line'])}")
             st.markdown(f"**Reported ETA** {md(detail['Reported ETA'])}  \n"
                         f"**Calculated ETA** {md(detail['Calculated ETA'])}  \n"
                         f"**ML ETA** (experimental) {md(detail['ML ETA (experimental)'])}")
+            st.caption(md(ml_accuracy(model)))
         st.caption(f"Destination typed by crew: {md(detail['Destination typed'])} · Speed used: "
                    f"{md(detail['Speed used'])} · Position age: {md(detail['Position age (h)'])} h · "
                    f"MMSI {md(detail['MMSI'])}")
@@ -253,7 +262,7 @@ with tab_ships:
 # ---------------------------------------------------------------------------
 with tab_chokepoints:
     st.subheader("Disruptions in the news")
-    st.caption(f"Headlines from the last {NEWS_DAYS} days about storms, strikes, closures, congestion, accidents "
+    st.caption(f"Headlines from the last {MAX_AGE_DAYS} days about storms, strikes, closures, congestion, accidents "
                "and conflict on the way to Hamburg. Matched by keyword from maritime news sites and Google News "
                "(no AI), refreshed every 3 hours. Click a headline for the full article.")
     headlines, failed_feeds = cached_headlines()
@@ -320,18 +329,17 @@ with tab_method:
             a, b, c = model["coefficients"]
             better = (model["model_mae_h"] is not None and model["calculated_mae_h"] is not None
                       and model["model_mae_h"] < model["calculated_mae_h"])
+            # The model file is written by a bot (see eta_model.load_model), so its values go through md() too.
             st.markdown(
-                f"A straight-line model learned from **{model['ships']} ships** ({model['examples']} examples) "
-                f"that we saw at sea and later saw arriving, across {model['snapshots']} data snapshots:  \n"
-                f"real hours ≈ {a:.2f} × calculated hours + {b:.1f} if stopped + {c:.1f}")
-            st.markdown(
-                f"Tested fairly (each ship predicted by a model that never saw it), the average error is "
-                f"**{model['model_mae_h']} h** for the model and **{model['calculated_mae_h']} h** for the plain "
-                f"calculated ETA. " + ("The model is currently a little more accurate." if better else
-                                       "**The model is not more accurate yet**, so trust the calculated ETA."))
-            st.caption(f"Retrained automatically after each data collection. Last trained "
-                       f"{md(model['trained_utc'][:16].replace('T', ' '))} UTC. Arrival times are only known to "
-                       f"within ~3 hours (the gap between snapshots), so expect this to improve slowly.")
+                f"A straight-line model learned from **{md(model['ships'])} ships** ({md(model['examples'])} "
+                f"examples) that we saw at sea and later saw moored in Hamburg, across {md(model['snapshots'])} "
+                f"data snapshots:  \nreal hours ≈ {a:.2f} × calculated hours + {b:.1f} if stopped + {c:.1f}")
+            st.markdown("Tested fairly: each ship is predicted by a model that never saw it.  \n"
+                        + ("**" if not better else "") + md(ml_accuracy(model)) + ("**" if not better else ""))
+            trained = f"{model['trained_utc']:%d %b %Y, %H:%M} UTC" if model["trained_utc"] else "unknown"
+            st.caption(f"Retrained automatically after each data collection. Last trained {md(trained)}. "
+                       "Arrival times are only known to within ~3 hours (the gap between snapshots), and only "
+                       "ships seen arriving while we were collecting count, so long trips are under-represented.")
         else:
             st.markdown("Not enough ships have been seen arriving yet to train a model.")
     with limits:

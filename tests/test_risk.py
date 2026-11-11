@@ -137,7 +137,8 @@ def test_container_guess_rules():
     assert tug["label"].startswith(CONTAINER_UNLIKELY) and not tug["likely"]   # not cargo, even with a line's name
 
     by_name = container_guess(ship(name="MAERSK SEOUL", ship_type=74))
-    assert by_name["label"] == f"{CONTAINER_LIKELY} · name"           # the table shows the clue
+    assert by_name["label"] == f"{CONTAINER_LIKELY} · name"           # the table shows which clue (name/berth)
+    assert by_name["verdict"] == CONTAINER_LIKELY
     assert by_name["likely"] and by_name["line"] == "Maersk"
 
     at_terminal = container_guess(ship(name="BIANCA RAMBOW", ship_type=79, lat=53.5321, lon=9.9087,
@@ -247,3 +248,12 @@ def test_eastern_port_and_upper_elbe_are_on_the_elbe():
     assert sea_area(53.87, 10.70) == "Baltic / Kattegat"   # Lübeck stays in the Baltic
     in_port = assess_ship(ship(lat=53.53, lon=10.06, sog=0, nav_status=5), NOW)
     assert in_port["Status"] == "Arrived" and in_port["Distance (nm)"] < 15
+
+
+def test_values_handed_to_the_ml_model():
+    row = assess_ship(ship(eta=eta_in(33)), NOW)                  # sailing in the Channel at 16 kn
+    assert row["calc_hours"] > 0 and row["stopped"] is False
+    expected = NOW + timedelta(hours=row["calc_hours"])        # counted from the last position, not from now
+    assert abs((row["calc_eta_utc"] - expected).total_seconds()) < 60   # calc_hours is rounded to 2 decimals
+    waiting = assess_ship(ship(sog=0.2, nav_status=1, eta=eta_in(30)), NOW)
+    assert waiting["stopped"] is True

@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from safety import clean_ais_text, md, safe_link, to_float, to_int  # noqa: E402
+from safety import clean_ais_text, clean_plain_text, md, safe_link, to_float, to_int  # noqa: E402
 
 
 def test_clean_ais_text():
@@ -51,3 +51,9 @@ def test_ais_not_available_codes_are_rejected():
     assert clean_eta({"Month": 13, "Day": 32, "Hour": 25, "Minute": 61}) == {"Month": 0, "Day": 0, "Hour": 0, "Minute": 0}
     assert clean_eta({"Month": 11, "Day": 2, "Hour": 6, "Minute": 30}) == {"Month": 11, "Day": 2, "Hour": 6, "Minute": 30}
     assert clean_eta("not a dict") is None
+
+
+def test_clean_plain_text():
+    assert clean_plain_text("  Storm\x00 on\n the   Elbe ", 100) == "Storm on the Elbe"
+    assert clean_plain_text("x" * 50, 10) == "x" * 10
+    assert clean_plain_text(None, 10) == ""

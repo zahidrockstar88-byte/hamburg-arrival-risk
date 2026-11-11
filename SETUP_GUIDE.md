@@ -49,7 +49,8 @@ Wait until it finishes (1–3 minutes). Warnings in yellow are normal.
 python -m pytest
 ```
 
-You should see `21 passed`. If you see `failed`, copy the red text and ask Claude Code.
+You should see a green line ending in `passed` (for example `37 passed`), and no `failed`.
+If you see `failed`, copy the red text and ask Claude Code.
 
 ## Step 6: Open the dashboard
 

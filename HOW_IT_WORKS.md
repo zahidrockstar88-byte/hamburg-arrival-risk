@@ -103,9 +103,12 @@ It retrains after every collection, so it can improve as data grows. Companies l
 years of history; this shows I understand the method and its limits."
 
 **"Where does the news come from?"**
-"Public RSS feeds from maritime news sites (gCaptain, Splash247, The Loadstar, Hellenic Shipping News).
-I keep headlines that mention a chokepoint, by keyword. I chose no AI on purpose: keyword matching can't
-invent facts, and the reader clicks through to the original article."
+"Public RSS feeds: maritime news sites (gCaptain, Splash247, The Loadstar, Hellenic Shipping News,
+Container News) and Google News searches in English and German for the Port of Hamburg, the Elbe and nearby
+waters. A headline is kept only if it names a place on the way to Hamburg, a disruption (storm, strike,
+closure, congestion, accident, attack) and is clearly about ships, from the last 7 days. Disruptions near
+Hamburg are shown first, because they can delay ships arriving in the next days. I chose no AI on purpose:
+keyword matching can't invent facts, and the reader clicks through to the original article."
 
 **"Why only Hamburg?"**
 "To keep it focused and reliable. Adding ports is easy in the code, but one port done well is better."

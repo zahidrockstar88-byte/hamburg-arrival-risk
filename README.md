@@ -42,7 +42,7 @@ The project treats all of it as untrusted ([safety.py](safety.py)):
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-streamlit run app.py          # opens with demo data, no key needed
+streamlit run app.py          # shows the latest ships saved in data/ships.json, no key needed
 ```
 
 For live data, add a free AISStream key to `.env` (see `.env.example`), then:

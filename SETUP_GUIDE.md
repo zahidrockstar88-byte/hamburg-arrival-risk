@@ -49,15 +49,15 @@ Wait until it finishes (1–3 minutes). Warnings in yellow are normal.
 python -m pytest
 ```
 
-You should see `6 passed`. If you see `failed`, copy the red text and ask Claude Code.
+You should see `21 passed`. If you see `failed`, copy the red text and ask Claude Code.
 
-## Step 6: Open the dashboard with demo data
+## Step 6: Open the dashboard
 
 ```bash
 streamlit run app.py
 ```
 
-Your browser opens the dashboard. It shows 10 **invented** demo ships, so you can see every flag.
+Your browser opens the dashboard. It shows the real ships saved in `data/ships.json` the last time data was collected.
 To stop the dashboard: click in the terminal and press **Control + C**.
 
 > The first time, Streamlit may ask for your email. Just press Enter to skip.
@@ -88,7 +88,7 @@ Then start the dashboard again:
 streamlit run app.py
 ```
 
-In the sidebar, choose **Live data**.
+The dashboard now shows the ships you just collected.
 
 **Tip:** run the collector a few times a day. Data builds up between runs.
 

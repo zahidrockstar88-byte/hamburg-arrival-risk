@@ -12,7 +12,6 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).parent
 DATA_DIR = PROJECT_DIR / "data"
 LIVE_DATA_FILE = DATA_DIR / "ships.json"        # written by collector.py
-DEMO_DATA_FILE = DATA_DIR / "demo_ships.json"   # sample data, works without a key
 RISK_ZONES_FILE = PROJECT_DIR / "risk_zones.json"  # chokepoint notes you update by hand
 
 # ---------------------------------------------------------------------------

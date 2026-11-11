@@ -9,7 +9,7 @@ Your browser opens the dashboard automatically.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pandas as pd
 import pydeck as pdk
@@ -48,21 +48,6 @@ st.html("""
 # ---------------------------------------------------------------------------
 # Loading data
 # ---------------------------------------------------------------------------
-def load_demo(now: datetime) -> tuple[list[dict], str]:
-    """Demo ships store times as 'minutes ago' / 'hours from now', so they never go stale."""
-    with open(config.DEMO_DATA_FILE, encoding="utf-8") as f:
-        raw = json.load(f)["ships"]
-    ships = []
-    for s in raw:
-        ship = dict(s)
-        ship["last_position_utc"] = (now - timedelta(minutes=s["minutes_ago"])).isoformat()
-        if s.get("eta_hours_from_now") is not None:
-            eta = now + timedelta(hours=s["eta_hours_from_now"])
-            ship["eta"] = {"Month": eta.month, "Day": eta.day, "Hour": eta.hour, "Minute": eta.minute}
-        ships.append(ship)
-    return ships, "Demo data (invented ships)"
-
-
 def load_live() -> tuple[list[dict], str]:
     with open(config.LIVE_DATA_FILE, encoding="utf-8") as f:
         raw = json.load(f)
@@ -89,15 +74,8 @@ def badge(flag: str) -> str:
 # Sidebar: choices
 # ---------------------------------------------------------------------------
 now = datetime.now(timezone.utc)
-live_available = config.LIVE_DATA_FILE.exists()
 
 with st.sidebar:
-    st.subheader("Data")
-    options = (["Live data", "Demo data"] if live_available else ["Demo data"])
-    source = st.radio("Source", options, label_visibility="collapsed")
-    if not live_available:
-        st.caption("No live data yet. Run `python collector.py` to collect some.")
-
     st.subheader("Rules")
     late_threshold = st.slider("Flag as late when the difference is more than (hours)", 3, 48,
                                config.LATE_THRESHOLD_HOURS)
@@ -114,7 +92,12 @@ with st.sidebar:
     st.caption("Calculated ETA = distance along the sea route ÷ speed. "
                "It is a risk flag, not a forecast.")
 
-ships, source_label = load_live() if source == "Live data" else load_demo(now)
+if not config.LIVE_DATA_FILE.exists():
+    st.title("Arrival Risk Monitor")
+    st.warning("No ship data yet. Run `python collector.py` to collect some.", icon=":material/sailing:")
+    st.stop()
+
+ships, source_label = load_live()
 ships = [s for s in ships if is_bound_for_hamburg(s.get("destination"))]
 if cargo_only:
     ships = [s for s in ships if is_cargo_type(s.get("ship_type")) is not False]   # keeps unknown types
@@ -134,9 +117,6 @@ st.title("Arrival Risk Monitor")
 st.markdown("Cargo and container ships on their way to Hamburg, and whether the arrival time each crew "
             "reports actually fits the distance still to go.")
 st.caption(f"{source_label} · page loaded {now:%d %b %Y, %H:%M} UTC")
-if source == "Demo data":
-    st.info("You are looking at **demo data**: invented ships that show how each flag works. "
-            "Switch to live data in the sidebar.", icon=":material/science:")
 
 if df.empty:
     st.warning("No ships heading to Hamburg in this data. Run the collector for longer (15+ minutes).",

@@ -18,7 +18,7 @@ import streamlit as st
 import config
 from eta_model import load_model, predict_hours
 from news import MAX_AGE_DAYS, latest_headlines
-from risk import assess_all, is_bound_for_hamburg, is_cargo_type, nice_time, parse_time
+from risk import ARRIVAL_FLAGS, assess_all, is_bound_for_hamburg, is_cargo_type, nice_time, parse_time
 from safety import clean_saved_ship, md, safe_link
 
 st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon=":material/anchor:", layout="wide")
@@ -28,9 +28,12 @@ RISK_STYLE = {
     "🔴": ("Likely late", "red", [180, 35, 24, 230]),
     "🟡": ("Check", "orange", [201, 128, 0, 230]),
     "🟢": ("On track", "green", [46, 125, 79, 230]),
-    "⚪": ("Arriving", "gray", [120, 128, 138, 200]),
+    "⚫": ("In another port", "gray", [150, 150, 150, 190]),
+    "⚪": ("Arriving", "violet", [120, 100, 170, 210]),
+    "🔵": ("Arrived", "blue", [40, 110, 170, 210]),
 }
-TEXT_COLOR = {"red": "#B42318", "orange": "#B54708", "green": "#2E7D4F", "gray": "#5F6B76"}
+TEXT_COLOR = {"red": "#B42318", "orange": "#B54708", "green": "#2E7D4F", "gray": "#5F6B76",
+              "violet": "#5B4B8A", "blue": "#1F5F96"}
 LEVEL_STYLE = {"high": ":material/error:", "medium": ":material/warning:", "low": ":material/check_circle:"}
 REPO_URL = "https://github.com/zahidrockstar88-byte/hamburg-arrival-risk"
 
@@ -85,8 +88,8 @@ def news_date(published: datetime) -> str:
 
 def ml_eta(row: dict, model: dict | None) -> str:
     """The experimental ML estimate for one ship, as text ('—' if there is no model or the ship is arriving)."""
-    if not model or row["Flag"] == "⚪":
-        return "—"
+    if not model or row["Flag"] in ARRIVAL_FLAGS or row["Flag"] == "⚫":
+        return "—"          # already there, or still in another port (departure time unknown)
     predicted = predict_hours(model["coefficients"], row["calc_hours"], row["stopped"])
     return nice_time(row["calc_eta_utc"] + timedelta(hours=predicted - row["calc_hours"]))
 
@@ -111,7 +114,7 @@ with st.sidebar:
     st.subheader("Show")
     cargo_only = st.checkbox("Cargo ships only (AIS type 70-79)", value=True,
                              help="Container ships report as cargo ships. Ships with unknown type are kept.")
-    show_arrived = st.checkbox("Ships already arriving", value=True)
+    show_arrived = st.checkbox("Ships arriving or arrived", value=True)
     containers_only = st.checkbox("Container ships only (likely)", value=False,
                                   help="A guess from the ship's name (e.g. MSC, MAERSK) or its berth at a "
                                        "container terminal. AIS does not say what a ship carries.")
@@ -131,7 +134,7 @@ if cargo_only:
 
 rows = assess_all(ships, now, {"late_threshold_h": late_threshold, "stale_after_h": stale_after})
 if not show_arrived:
-    rows = [r for r in rows if r["Flag"] != "⚪"]
+    rows = [r for r in rows if r["Flag"] not in ARRIVAL_FLAGS]
 if containers_only:
     rows = [r for r in rows if r["container_likely"]]
 model = load_model()
@@ -142,7 +145,7 @@ df = pd.DataFrame(rows)
 # ---------------------------------------------------------------------------
 # Header and key numbers
 # ---------------------------------------------------------------------------
-st.html('<div class="kicker">Port of Hamburg · Inbound vessels</div>')
+st.html('<div class="kicker">Port of Hamburg · Hamburg-bound ships</div>')
 st.title("Arrival Risk Monitor")
 st.markdown("Cargo and container ships on their way to Hamburg, and whether the arrival time each crew "
             "reports actually fits the distance still to go.")
@@ -154,13 +157,13 @@ if df.empty:
     st.stop()
 
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Inbound to Hamburg", len(df), border=True)
+c1.metric("Hamburg-bound ships", len(df), border=True)
 c2.metric("Likely container ships", int(df["container_likely"].sum()), border=True,
           help="A guess from the ship's name or its berth. See Method and limits.")
 c3.metric("Likely late", int((df["Flag"] == "🔴").sum()), border=True,
           help=f"Calculated ETA is more than {late_threshold} h after the ETA the crew reported.")
 c4.metric("Need checking", int((df["Flag"] == "🟡").sum()), border=True,
-          help="Stopped, no ETA sent, or position data too old.")
+          help="Waiting at anchor or at sea, no ETA sent, or position data too old.")
 c5.metric("On track", int((df["Flag"] == "🟢").sum()), border=True)
 
 tab_ships, tab_chokepoints, tab_method = st.tabs(["Vessels", "Chokepoints", "Method and limits"])
@@ -169,7 +172,7 @@ tab_ships, tab_chokepoints, tab_method = st.tabs(["Vessels", "Chokepoints", "Met
 # Vessels: map, table, one-ship detail
 # ---------------------------------------------------------------------------
 with tab_ships:
-    st.markdown(" ".join(badge(f) for f in RISK_STYLE) + " &nbsp; :blue-badge[Port of Hamburg]")
+    st.markdown(" ".join(badge(f) for f in RISK_STYLE) + " &nbsp; :primary-badge[Port of Hamburg]")
 
     map_df = df.copy()
     map_df["color"] = map_df["Flag"].map(lambda f: RISK_STYLE[f][2])
@@ -301,7 +304,8 @@ with tab_method:
 3. We measure the distance along the usual sea route (for example Gibraltar → Ushant → Dover Strait → Elbe),
    then the River Elbe at a lower speed, plus a short buffer for the pilot and berthing.
 4. Distance ÷ speed gives a **calculated ETA**. We compare it with the ETA the crew reported.
-5. A big gap, an old position or a stopped ship gets a flag.
+5. A big gap, an old position, a ship waiting at anchor or a missing ETA gets a flag. A ship moored in
+   another port is shown as **In another port**, and a ship moored in Hamburg as **Arrived**.
 6. **Container ship?** AIS only says "cargo ship". We guess "container ship" when the name starts or ends
    with a container line's word (for example `MSC`, `MAERSK`, `CMA CGM`, `EVER`), or when a ship is moored
    at a Hamburg container terminal (Waltershof, Altenwerder, Tollerort). The table shows which clue was used.

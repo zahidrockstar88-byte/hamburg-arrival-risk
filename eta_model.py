@@ -10,7 +10,7 @@ The idea in plain words:
 Where the examples come from:
   The GitHub Action saves data/ships.json every ~3 hours, and git keeps every
   saved version. So the git history is a list of snapshots. For each ship we
-  look for: "seen out at sea in one snapshot" -> "seen arriving in a later one".
+  look for: "seen out at sea in one snapshot" -> "seen moored in Hamburg in a later one".
   That gives one example: what we calculated then, and how long it really took.
 
 The model:
@@ -38,7 +38,7 @@ from pathlib import Path
 import numpy as np
 
 import config
-from risk import assess_ship, parse_time
+from risk import ARRIVAL_FLAGS, assess_ship, parse_time
 from safety import clean_saved_ship
 
 MODEL_FILE = config.PROJECT_DIR / "model" / "eta_model.json"
@@ -69,8 +69,8 @@ def load_snapshots_from_git(repo: Path = config.PROJECT_DIR) -> list[dict]:
 def build_examples(snapshots: list[dict]) -> list[dict]:
     """
     Turn snapshots into training examples. The arrival time is the first time we
-    see the ship arriving (⚪), so it is only accurate to about the gap between
-    snapshots (~3 hours).
+    see the ship moored in Hamburg (🔵 Arrived, see GLOSSARY.md: arrival = berthing),
+    so it is only accurate to about the gap between snapshots (~3 hours).
     """
     sightings = {}                         # mmsi -> {position time: (row, ship)}
     for snapshot in snapshots:
@@ -85,13 +85,13 @@ def build_examples(snapshots: list[dict]) -> list[dict]:
     examples = []
     for mmsi, by_time in sightings.items():
         times = sorted(by_time)
-        arrived_at = next((t for t in times if by_time[t]["Flag"] == "⚪"), None)
+        arrived_at = next((t for t in times if by_time[t]["Flag"] == "🔵"), None)
         if arrived_at is None:
             continue
         for t in times:
             row = by_time[t]
-            if t >= arrived_at or row["Flag"] == "⚪":
-                continue
+            if t >= arrived_at or row["Flag"] in ARRIVAL_FLAGS:
+                continue                       # only learn from sightings before the final approach
             actual = (arrived_at - t).total_seconds() / 3600
             if 0 < actual <= MAX_HOURS:
                 examples.append({"mmsi": mmsi, "calc_hours": row["calc_hours"],

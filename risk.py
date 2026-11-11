@@ -67,6 +67,8 @@ def sea_area(lat: float, lon: float) -> str:
     """Name the sea area a position is in."""
     if 53.35 <= lat <= 54.05 and 8.1 <= lon <= 10.05:
         return "Elbe river"
+    if 53.35 <= lat <= 53.65 and 10.05 < lon <= 10.6:
+        return "Elbe river"        # the eastern Port of Hamburg and the upper Elbe (inland ships)
     if lon > 10.2 and lat > 53.8:
         return "Baltic / Kattegat"
     if lat > 57.0 and 7.5 < lon <= 10.2:
@@ -303,7 +305,11 @@ def container_guess(ship: dict) -> dict:
 # ---------------------------------------------------------------------------
 # 7. The main check: one row of results per ship
 # ---------------------------------------------------------------------------
-FLAG_ORDER = {"🔴": 0, "🟡": 1, "🟢": 2, "⚪": 3}
+# The risk flags (see GLOSSARY.md). The symbols are internal codes; app.py turns them into coloured labels.
+#   🔴 Likely late   🟡 Check (Waiting, No ETA, Data too old)   🟢 On track
+#   ⚫ In another port (moored elsewhere, working cargo: normal)   ⚪ Arriving (final approach)   🔵 Arrived (moored in Hamburg)
+FLAG_ORDER = {"🔴": 0, "🟡": 1, "🟢": 2, "⚫": 3, "⚪": 4, "🔵": 5}
+ARRIVAL_FLAGS = ("⚪", "🔵")      # ships at or very close to Hamburg: nothing left to judge
 
 
 def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None = None) -> dict:
@@ -323,7 +329,10 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
 
     # --- Which speed do we trust? ---
     sog = ship.get("sog")
-    stopped = (sog is not None and sog < 1.0) or ship.get("nav_status") in (1, 5)   # 1 = at anchor, 5 = moored
+    moored_here = is_moored(ship)                      # status "moored", or not moving at all
+    in_another_port = ship.get("nav_status") == 5      # the crew says "moored" (used when not in Hamburg)
+    waiting = (sog is not None and sog < 1.0) or ship.get("nav_status") == 1   # 1 = at anchor
+    stopped = waiting or in_another_port               # not moving, for whatever reason (used by eta_model.py)
     if sog is not None and config.MIN_VALID_SPEED_KN <= sog <= config.MAX_VALID_SPEED_KN:
         speed, speed_note = sog, "current speed"
     else:
@@ -336,14 +345,21 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
     delay_h = (calc_eta - reported_eta).total_seconds() / 3600 if reported_eta else None
 
     # --- Decide the flag (first rule that matches wins) ---
-    if total_nm <= config.ARRIVED_WITHIN_NM or (route["area"] == "Elbe river" and ship.get("nav_status") == 5):
-        flag, label, reason = "⚪", "Arriving", "Ship is in or very close to the port of Hamburg."
+    near_hamburg = total_nm <= config.ARRIVED_WITHIN_NM
+    if near_hamburg and moored_here:
+        flag, label, reason = "🔵", "Arrived", "Ship is moored in the Port of Hamburg."
+    elif near_hamburg:
+        flag, label, reason = "⚪", "Arriving", "Ship is on its final approach, close to the Port of Hamburg."
     elif age_h > s["stale_after_h"]:
         flag, label = "🟡", "Data too old"
         reason = f"Last position is {age_h:.0f} h old. The ship may have left our receiver range."
-    elif stopped:
-        flag, label = "🟡", "Stopped"
-        reason = ("Ship is stopped or at anchor. It may be waiting for a berth, the tide or a pilot, "
+    elif in_another_port:
+        flag, label = "⚫", "In another port"
+        reason = ("Ship is moored at a berth in another port, probably working cargo before it sails on to "
+                  "Hamburg. Its departure time is unknown, so we can't judge its ETA yet.")
+    elif waiting:
+        flag, label = "🟡", "Waiting"
+        reason = ("Ship is at anchor or not moving at sea. It may be waiting for a berth, the tide or a pilot, "
                   "so add waiting time to any ETA.")
     elif reported_eta is None:
         flag, label = "🟡", "No ETA sent"

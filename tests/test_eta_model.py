@@ -25,7 +25,7 @@ def ship(mmsi, lat, lon, when, sog=12.0):
             "lat": lat, "lon": lon, "sog": sog, "nav_status": 0, "last_position_utc": when.isoformat()}
 
 
-def test_example_is_built_from_at_sea_then_arriving():
+def test_example_is_built_from_at_sea_then_moored_in_hamburg():
     at_sea = snapshot([ship("211000001", 54.0, 7.5, T0)])                      # North Sea
     arrived = snapshot([ship("211000001", 53.54, 9.97, T0 + timedelta(hours=10), sog=0)])   # in Hamburg
     examples = build_examples([at_sea, arrived])
@@ -72,3 +72,13 @@ def test_broken_model_file_is_ignored(tmp_path):
     bad.write_text("not json")
     assert load_model(bad) is None
     assert load_model(tmp_path / "missing.json") is None
+
+
+def test_passing_within_15_nm_is_not_an_arrival():
+    # GLOSSARY.md: arrival = moored at a Hamburg berth. A ship still moving near Hamburg hasn't arrived yet.
+    at_sea = snapshot([ship("211000004", 54.0, 7.5, T0)])
+    approaching = snapshot([ship("211000004", 53.55, 9.85, T0 + timedelta(hours=8), sog=8.0)])
+    assert build_examples([at_sea, approaching]) == []
+    moored = snapshot([ship("211000004", 53.54, 9.97, T0 + timedelta(hours=10), sog=0)])
+    examples = build_examples([at_sea, approaching, moored])
+    assert [e["actual_hours"] for e in examples] == [10.0]     # the approaching sighting is not a training example

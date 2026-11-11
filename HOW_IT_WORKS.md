@@ -49,13 +49,16 @@ It picks only the waypoints still ahead, based on which sea area the ship is in.
 - Plus 1 hour for pilot boarding and berthing.
 - Counted from the time of the ship's **last position**, not from now. Otherwise old data would look fine.
 
-**4. Compare and flag.** The first rule that matches wins:
+**4. Compare and flag.** The first rule that matches wins. "Arrival" always means **moored at a Hamburg berth**
+(see [GLOSSARY.md](GLOSSARY.md) and [ADR 0001](docs/adr/0001-arrival-means-berthing.md)):
 
 | Flag | Rule | Why it matters |
 |---|---|---|
-| ⚪ Arriving | Within 15 nm of Hamburg | Nothing to predict |
+| Arrived | Within 15 nm of Hamburg and moored | This is the arrival: moored at a Hamburg berth |
+| Arriving | Within 15 nm of Hamburg, still moving | Final approach, nothing left to judge |
 | 🟡 Data too old | No position for 24+ hours | Can't trust anything else |
-| 🟡 Stopped | Speed under 1 kn or at anchor | Waiting for berth, tide or pilot: time unknown |
+| In another port | Moored at a berth elsewhere (e.g. Rotterdam) | Working cargo before sailing to Hamburg: normal, departure time unknown |
+| 🟡 Waiting | At anchor, or under 1 kn at sea | Waiting for berth, tide or pilot: a real delay signal |
 | 🟡 No ETA sent | Crew entered no valid ETA | Nothing to compare |
 | 🔴 ETA already passed | Reported ETA is in the past, ship still 50+ nm away | Clearly out of date |
 | 🔴 Likely late | Calculated ETA is 12+ hours after reported ETA | Reported ETA looks unrealistic |

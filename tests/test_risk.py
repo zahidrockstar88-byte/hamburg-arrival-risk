@@ -62,10 +62,10 @@ def test_flags():
     assert assess_ship(ship(eta=eta_in(33)), NOW)["Flag"] == "🟢"
     assert assess_ship(ship(eta=eta_in(10)), NOW)["Flag"] == "🔴"                    # far too optimistic
     assert assess_ship(ship(eta=None), NOW)["Status"] == "No ETA sent"
-    assert assess_ship(ship(sog=0.1, nav_status=1, eta=eta_in(30)), NOW)["Status"] == "Stopped"
+    assert assess_ship(ship(sog=0.1, nav_status=1, eta=eta_in(30)), NOW)["Status"] == "Waiting"
     old = (NOW - timedelta(hours=30)).isoformat()
     assert assess_ship(ship(last_position_utc=old, eta=eta_in(30)), NOW)["Status"] == "Data too old"
-    assert assess_ship(ship(lat=53.55, lon=9.85, eta=eta_in(1)), NOW)["Flag"] == "⚪"
+    assert assess_ship(ship(lat=53.55, lon=9.85, eta=eta_in(1)), NOW)["Flag"] == "⚪"    # still moving: Arriving
 
 
 def test_collector_reads_aisstream_messages():
@@ -219,3 +219,31 @@ def test_old_saved_records_are_cleaned_when_loaded(tmp_path, monkeypatch):
     assert s["ship_type"] is None
     assert s["sog"] is None and s["cog"] is None          # 102.3 and 360 mean "not available" in AIS
     assert s["eta"] == {"Month": 0, "Day": 0, "Hour": 24, "Minute": 60}   # impossible month/day -> "not set"
+
+
+# ---------------------------------------------------------------------------
+# Arrival words from GLOSSARY.md: Arrived, Arriving, Waiting, In another port
+# ---------------------------------------------------------------------------
+def test_arrived_means_moored_in_hamburg():
+    moored = assess_ship(ship(lat=53.5399, lon=9.9070, sog=0, nav_status=5, eta=eta_in(1)), NOW)
+    assert moored["Flag"] == "🔵" and moored["Status"] == "Arrived"
+    approaching = assess_ship(ship(lat=53.55, lon=9.85, sog=8.0, nav_status=0, eta=eta_in(1)), NOW)
+    assert approaching["Status"] == "Arriving"
+
+
+def test_moored_in_another_port_is_not_waiting():
+    rotterdam = assess_ship(ship(lat=51.95, lon=4.05, sog=0, nav_status=5, eta=eta_in(30)), NOW)
+    assert rotterdam["Flag"] == "⚫" and rotterdam["Status"] == "In another port"
+    at_anchor = assess_ship(ship(lat=54.0, lon=7.5, sog=0.2, nav_status=1, eta=eta_in(30)), NOW)
+    assert at_anchor["Flag"] == "🟡" and at_anchor["Status"] == "Waiting"
+    drifting = assess_ship(ship(lat=54.0, lon=7.5, sog=0.3, nav_status=0, eta=eta_in(30)), NOW)
+    assert drifting["Status"] == "Waiting"
+
+
+def test_eastern_port_and_upper_elbe_are_on_the_elbe():
+    # These ships are in Hamburg, not 150 nm away in the North Sea (bug found while writing GLOSSARY.md).
+    assert sea_area(53.53, 10.06) == "Elbe river"      # eastern part of the Port of Hamburg
+    assert sea_area(53.43, 10.34) == "Elbe river"      # upper Elbe, inland ships coming downriver
+    assert sea_area(53.87, 10.70) == "Baltic / Kattegat"   # Lübeck stays in the Baltic
+    in_port = assess_ship(ship(lat=53.53, lon=10.06, sog=0, nav_status=5), NOW)
+    assert in_port["Status"] == "Arrived" and in_port["Distance (nm)"] < 15

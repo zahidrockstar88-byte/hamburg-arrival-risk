@@ -202,7 +202,85 @@ def route_note(ship: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 6. The main check: one row of results per ship
+# 6. Is it a container ship, and which shipping line runs it?
+# ---------------------------------------------------------------------------
+# AIS only says "cargo ship" (type 70-79). It does not say what is on board,
+# and it never says who owns the containers or the cargo (that is in the
+# confidential bill of lading). So this is an educated GUESS, and we say so.
+
+def _name_words(name: str | None) -> list[str]:
+    """Split a ship name into words: 'CMA CGM  GEMINI' -> ['CMA', 'CGM', 'GEMINI']."""
+    return re.sub(r"[^A-Z0-9\- ]", " ", (name or "").upper()).split()
+
+
+def shipping_line(name: str | None) -> tuple[str, str] | None:
+    """
+    Guess the shipping line from the ship's name.
+    Returns (line, matched word) or None. Whole words only, so "EVERGREEN" does not match "EVER".
+    """
+    words = _name_words(name)
+    for position, word, line in config.SHIPPING_LINE_NAMES:
+        pattern = word.split()
+        if len(words) <= len(pattern):            # the name must have something besides the line's word
+            continue
+        part = words[: len(pattern)] if position == "start" else words[-len(pattern):]
+        if part == pattern:
+            return line, word
+    return None
+
+
+def container_terminal(lat: float | None, lon: float | None) -> str | None:
+    """Name of the Hamburg container terminal at this position, or None."""
+    if lat is None or lon is None:
+        return None
+    for terminal, ((south, west), (north, east)) in config.CONTAINER_TERMINALS.items():
+        if south <= lat <= north and west <= lon <= east:
+            return terminal
+    return None
+
+
+def is_cargo_type(ship_type) -> bool | None:
+    """True for AIS cargo types 70-79, False for other known types, None if unknown."""
+    if ship_type in (None, 0):
+        return None
+    try:
+        return 70 <= int(ship_type) <= 79
+    except (TypeError, ValueError):
+        return None
+
+
+def container_guess(ship: dict) -> dict:
+    """
+    Decide 'Container ship?' for one ship, with the reason, in plain words.
+    Rules, first match wins:
+      1. Known type that is not cargo (tug, ferry, tanker...)  -> No
+      2. Name starts/ends with a container line's word       -> Likely
+      3. Cargo ship moored at a container terminal           -> Likely
+      4. Anything else                                        -> Unknown
+    """
+    cargo = is_cargo_type(ship.get("ship_type"))
+    line = shipping_line(ship.get("name"))
+
+    if cargo is False:
+        return {"container": "❌ No", "line": None,
+                "reason": f"AIS ship type {ship.get('ship_type')} is not a cargo ship."}
+    if line:
+        return {"container": "📦 Likely", "line": line[0],
+                "reason": f"The name contains \"{line[1]}\", a word used by {line[0]} container ships."}
+
+    sog = ship.get("sog")
+    moored = ship.get("nav_status") == 5 or (sog is not None and sog < 0.5)
+    terminal = container_terminal(ship.get("lat"), ship.get("lon"))
+    if cargo and moored and terminal:
+        return {"container": "📦 Likely", "line": None,
+                "reason": f"Cargo ship moored at the {terminal} container terminal."}
+
+    return {"container": "❓ Unknown", "line": None,
+            "reason": "AIS does not say what a ship carries, and neither the name nor the berth gives a clue."}
+
+
+# ---------------------------------------------------------------------------
+# 7. The main check: one row of results per ship
 # ---------------------------------------------------------------------------
 FLAG_ORDER = {"🔴": 0, "🟡": 1, "🟢": 2, "⚪": 3}
 
@@ -264,10 +342,15 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
         flag, label = "🟢", "On track"
         reason = f"Reported ETA fits the distance at {speed:.1f} kn (difference {delay_h:+.0f} h)."
 
+    container = container_guess(ship)
+
     return {
         "Flag": flag,
         "Status": label,
         "Ship": ship.get("name") or f"MMSI {ship.get('mmsi')}",
+        "Container ship?": container["container"],
+        "Shipping line": container["line"] or "—",
+        "Container reason": container["reason"],
         "Where": route["area"],
         "Distance (nm)": round(total_nm),
         "Speed (kn)": round(sog, 1) if sog is not None else None,

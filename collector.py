@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 
 import config
 from risk import is_bound_for_hamburg, sea_area
+from safety import clean_ais_text, to_float, to_int
 
 
 # ---------------------------------------------------------------------------
@@ -80,32 +81,49 @@ def _meta_value(meta: dict, *names):
     return None
 
 
+def _clean_eta(eta) -> dict | None:
+    """Keep only the four ETA numbers, as whole numbers. Anything else is dropped."""
+    if not isinstance(eta, dict):
+        return None
+    return {key: to_int(eta.get(key), 0, 60) or 0 for key in ("Month", "Day", "Hour", "Minute")}
+
+
 def handle_message(ships: dict, msg: dict) -> None:
-    """Update our list of ships with one incoming message."""
+    """
+    Update our list of ships with one incoming message.
+    Everything in the message is untrusted (see safety.py), so every value is
+    checked and cleaned before we keep it.
+    """
+    if not isinstance(msg, dict):
+        return
     kind = msg.get("MessageType")
-    meta = msg.get("MetaData") or {}
-    body = (msg.get("Message") or {}).get(kind) or {}
-    mmsi = _meta_value(meta, "MMSI") or body.get("UserID")
-    if not mmsi:
+    meta = msg.get("MetaData") if isinstance(msg.get("MetaData"), dict) else {}
+    message = msg.get("Message") if isinstance(msg.get("Message"), dict) else {}
+    body = message.get(kind) if isinstance(message.get(kind), dict) else {}
+
+    # MMSI = the ship's 9-digit radio ID. We use it as the key, so it must be a real number.
+    mmsi = to_int(_meta_value(meta, "MMSI") or body.get("UserID"), 1, 999_999_999)
+    if mmsi is None:
         return
     mmsi = str(mmsi)
     ship = ships.setdefault(mmsi, {"mmsi": mmsi})
 
-    name = (_meta_value(meta, "ShipName", "shipname") or "").strip()
+    name = clean_ais_text(_meta_value(meta, "ShipName", "shipname"), "name")
     if name:
         ship["name"] = name
 
     if kind == "PositionReport":
-        lat, lon = body.get("Latitude"), body.get("Longitude")
-        if lat is None or lon is None or abs(lat) > 90 or abs(lon) > 180:
-            return  # 91/181 means "position not available"
+        lat = to_float(body.get("Latitude"), -90, 90)      # 91/181 means "position not available"
+        lon = to_float(body.get("Longitude"), -180, 180)
+        if lat is None or lon is None:
+            return
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         ship.update({
             "lat": round(lat, 5),
             "lon": round(lon, 5),
-            "sog": body.get("Sog"),          # speed over ground, knots
-            "cog": body.get("Cog"),          # course over ground, degrees
-            "nav_status": body.get("NavigationalStatus"),
+            "sog": to_float(body.get("Sog"), 0, 102.3),     # speed over ground, knots
+            "cog": to_float(body.get("Cog"), 0, 360),       # course over ground, degrees
+            "nav_status": to_int(body.get("NavigationalStatus"), 0, 15),
             "last_position_utc": now,
         })
         if "first_seen_utc" not in ship:
@@ -119,13 +137,13 @@ def handle_message(ships: dict, msg: dict) -> None:
 
     elif kind == "ShipStaticData":
         ship.update({
-            "destination": (body.get("Destination") or "").strip(),
-            "eta": body.get("Eta"),          # {"Month":..,"Day":..,"Hour":..,"Minute":..}
-            "ship_type": body.get("Type"),   # 70-79 = cargo ships (incl. container ships)
-            "imo": body.get("ImoNumber"),
-            "callsign": (body.get("CallSign") or "").strip(),
-            "draught_m": body.get("MaximumStaticDraught"),
-            "name": (body.get("Name") or ship.get("name") or "").strip(),
+            "destination": clean_ais_text(body.get("Destination"), "destination"),
+            "eta": _clean_eta(body.get("Eta")),                  # {"Month":..,"Day":..,"Hour":..,"Minute":..}
+            "ship_type": to_int(body.get("Type"), 0, 99),        # 70-79 = cargo ships (incl. container ships)
+            "imo": to_int(body.get("ImoNumber"), 1, 9_999_999),  # 7-digit ship ID
+            "callsign": clean_ais_text(body.get("CallSign"), "callsign"),
+            "draught_m": to_float(body.get("MaximumStaticDraught"), 0, 25.5),
+            "name": clean_ais_text(body.get("Name"), "name") or ship.get("name", ""),
             "last_static_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         })
 
@@ -156,9 +174,14 @@ async def listen(api_key: str, minutes: float) -> None:
                         raw = await asyncio.wait_for(ws.recv(), timeout=30)
                     except asyncio.TimeoutError:
                         continue
-                    msg = json.loads(raw)
+                    try:
+                        msg = json.loads(raw)
+                    except (TypeError, ValueError):
+                        continue                              # not valid JSON: ignore it
+                    if not isinstance(msg, dict):
+                        continue
                     if "error" in msg:
-                        sys.exit(f"AISStream refused the connection: {msg['error']}\n"
+                        sys.exit(f"AISStream refused the connection: {str(msg['error'])[:200]!r}\n"
                                  "Check that your API key in .env is correct.")
                     handle_message(ships, msg)
                     received += 1

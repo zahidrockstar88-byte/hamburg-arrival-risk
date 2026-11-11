@@ -19,7 +19,21 @@ sanity check catches the unrealistic ones early.
 3. Measures the distance left along the usual sea route (e.g. Gibraltar → Ushant → Dover Strait → Elbe).
 4. Calculates an ETA from distance and speed, with slower speed on the River Elbe and a pilot/berth buffer.
 5. Flags each ship: 🔴 likely late, 🟡 needs checking (old data, stopped, no ETA), 🟢 on track, ⚪ arriving.
-6. Shows chokepoint risks on the way (Red Sea, Hormuz, North European congestion).
+6. Guesses which ships are **container ships** and which **shipping line** runs them (MSC, Maersk, CMA CGM,
+   Evergreen, Hapag-Lloyd, ...), from the ship's name or its berth at a Hamburg container terminal.
+7. Shows chokepoint risks on the way (Red Sea, Hormuz, North European congestion).
+
+## Security
+
+AIS messages are broadcast by radio, so anyone can send any text as a ship name or destination.
+The project treats all of it as untrusted ([safety.py](safety.py)):
+
+- The collector keeps only characters the AIS standard allows, cuts text to its official length and checks
+  that numbers (ship type, IMO, position, speed) are real numbers in a valid range.
+- The dashboard escapes every ship-supplied value, so a name like `[CLICK](HTTP://X.CO)` stays plain text.
+- Only `https://` links are shown for chokepoint sources.
+- The API key lives only in `.env` (ignored by git) and in encrypted GitHub Actions secrets.
+- The GitHub Action is pinned to exact commit IDs and has only the permission it needs.
 
 ## Quick start
 
@@ -48,6 +62,9 @@ Python · Streamlit · pydeck · AISStream.io websocket API · pytest
 - Routes are simplified waypoints, not exact shipping lanes.
 - Ships change speed, wait for berths and follow tides, so a calculated ETA is a sanity check, not a forecast.
 - Chokepoint notes are updated by hand (`risk_zones.json`).
+- "Container ship" and "shipping line" are educated guesses: AIS does not say what a ship carries, and ships
+  can be renamed or chartered. Who leases the containers or owns the cargo is not public (it is in
+  confidential bills of lading), so the dashboard does not show it.
 
 ## Author
 

@@ -31,7 +31,7 @@ Read this until you can explain each part in your own words. Interviewers care m
   and weak in the open ocean. That's why the project focuses on the **last part of the journey**, where the
   data is reliable.
 
-## The five steps
+## The six steps
 
 **1. Find ships going to Hamburg.**
 The destination is free text. The code accepts `HAMBURG` or the UN/LOCODE `DEHAM`, in any spacing.
@@ -68,6 +68,15 @@ If the ship was seen off West Africa, it probably came around the Cape of Good H
 (roughly 10–14 extra days from Asia). If it was seen in the Mediterranean, it came via Suez or a Med port.
 Chokepoint notes (Red Sea, Hormuz, port congestion) come from a file updated by hand each week.
 
+**6. Guess which ships are container ships, and which shipping line runs them.**
+AIS only says "cargo ship" (types 70–79). It never says what is on board. So the code makes an educated guess:
+- **By name:** most big container ships carry their line's name: `MSC SINDY`, `MAERSK SEOUL`, `CMA CGM GEMINI`,
+  `EVER GREET`. A list of about 15 container lines is in `config.py`. Whole words only, so `EVERGREEN SPIRIT`
+  does not count as Evergreen.
+- **By berth:** a cargo ship moored at Waltershof (Burchardkai / Eurogate), Altenwerder or Tollerort is
+  almost certainly a container ship. This catches feeder ships with no line name.
+- A known non-cargo type (tug, ferry, tanker) is always "No", even if its name contains a line's word.
+
 ---
 
 ## Questions you will get, and honest answers
@@ -91,6 +100,17 @@ Focusing on the European approach uses the data where it's reliable."
 **"What would you improve next?"**
 "Log every flagged ship and check later whether it really arrived late. That measures how often
 the flag is right, and lets me tune the 12-hour limit with data instead of a guess."
+
+**"Can you see who owns the containers or the cargo?"**
+"No, and that's on purpose. Containers are often leased from companies like Triton or Textainer, and the
+cargo owner is only in the bill of lading, which is confidential. AIS never carries that. What I *can* show
+is the shipping line running the ship, guessed from its name or its berth, and I label it as a guess."
+
+**"Is it secure?"**
+"Ship names are typed by crews and sent by radio, so anyone can send anything. I treat all AIS text as
+untrusted: the collector keeps only characters the AIS standard allows and checks numbers are in range,
+and the dashboard escapes every ship value so it can't turn into a link. There are tests for both.
+The API key is never in the code, and the GitHub Action is pinned to exact versions."
 
 **"Who would use this?"**
 "A forwarder or importer planning trucks and warehouse slots, or a terminal planning berths.

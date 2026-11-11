@@ -75,3 +75,42 @@ MAX_VALID_SPEED_KN = 26.0
 
 # A ship this close to Hamburg counts as arriving (nautical miles).
 ARRIVED_WITHIN_NM = 15
+
+# ---------------------------------------------------------------------------
+# Container ships and shipping lines
+# ---------------------------------------------------------------------------
+# AIS does NOT say what a ship carries. Container ships report as ordinary
+# cargo ships (type 70-79). So we make an educated guess in two ways:
+#
+# 1. The ship's name. Most big container ships are named after the shipping
+#    line (carrier) that runs them: "MSC SINDY", "MAERSK SEOUL", "EVER GREET".
+#    Format: (where the word must be, the word, the shipping line's name)
+#    "start" = first word(s) of the name, "end" = last word(s) of the name.
+SHIPPING_LINE_NAMES = [
+    ("start", "MSC", "MSC"),
+    ("start", "MAERSK", "Maersk"),
+    ("end", "MAERSK", "Maersk"),            # e.g. "MADRID MAERSK"
+    ("start", "CMA CGM", "CMA CGM"),
+    ("start", "APL", "CMA CGM (APL)"),
+    ("start", "COSCO", "COSCO Shipping"),
+    ("start", "CSCL", "COSCO Shipping"),
+    ("start", "OOCL", "OOCL (COSCO group)"),
+    ("start", "EVER", "Evergreen"),
+    ("start", "ONE", "Ocean Network Express (ONE)"),
+    ("end", "EXPRESS", "Hapag-Lloyd"),      # e.g. "HAMBURG EXPRESS"; a guess, other ships use this word too
+    ("start", "HMM", "HMM"),
+    ("start", "YM", "Yang Ming"),
+    ("start", "ZIM", "ZIM"),
+    ("start", "WAN HAI", "Wan Hai"),
+    ("start", "X-PRESS", "X-Press Feeders"),
+    ("start", "KOTA", "PIL"),
+]
+
+# 2. Where the ship is moored. A cargo ship moored at a container terminal is
+#    almost certainly a container ship. Boxes are APPROXIMATE:
+#    ((south lat, west lon), (north lat, east lon)).
+CONTAINER_TERMINALS = {
+    "Waltershof (Burchardkai / Eurogate)": ((53.525, 9.880), (53.548, 9.935)),
+    "Altenwerder (CTA)": ((53.495, 9.915), (53.515, 9.945)),
+    "Tollerort (CTT)": ((53.538, 9.935), (53.548, 9.960)),
+}

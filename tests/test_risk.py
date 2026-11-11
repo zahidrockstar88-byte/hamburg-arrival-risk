@@ -10,7 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from collector import handle_message  # noqa: E402
-from risk import assess_ship, distance_nm, is_bound_for_hamburg, parse_ais_eta, sea_area  # noqa: E402
+from risk import (assess_ship, container_guess, container_terminal, distance_nm,  # noqa: E402
+                  is_bound_for_hamburg, parse_ais_eta, sea_area, shipping_line)
 
 NOW = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
 
@@ -84,3 +85,75 @@ def test_collector_reads_aisstream_messages():
     assert s["name"] == "TEST SHIP"
     assert s["sog"] == 17.5 and s["destination"] == "DEHAM"
     assert s["seen_in_mediterranean"] is True
+
+
+# ---------------------------------------------------------------------------
+# Container ships and shipping lines
+# ---------------------------------------------------------------------------
+def test_shipping_line_from_name():
+    assert shipping_line("MSC SINDY") == ("MSC", "MSC")
+    assert shipping_line("CMA CGM GEMINI") == ("CMA CGM", "CMA CGM")
+    assert shipping_line("MADRID MAERSK")[0] == "Maersk"           # line's word at the end
+    assert shipping_line("EVER GREET")[0] == "Evergreen"
+    assert shipping_line("HAMBURG EXPRESS")[0] == "Hapag-Lloyd"
+    assert shipping_line("EVERGREEN SPIRIT") is None              # whole words only
+    assert shipping_line("MSC") is None                           # the line's word alone is not a ship name
+    assert shipping_line("RIX TANGO") is None
+    assert shipping_line(None) is None
+
+
+def test_container_terminal_areas():
+    assert container_terminal(53.5399, 9.9070) == "Waltershof (Burchardkai / Eurogate)"   # where MSC SINDY moored
+    assert container_terminal(53.505, 9.930) == "Altenwerder (CTA)"
+    assert container_terminal(54.15, 7.47) is None                                       # out in the North Sea
+    assert container_terminal(None, None) is None
+
+
+def test_container_guess_rules():
+    tug = ship(name="MSC HELPER", ship_type=52)
+    assert container_guess(tug)["container"] == "❌ No"           # not a cargo type, even with a line's name
+
+    by_name = container_guess(ship(name="MAERSK SEOUL", ship_type=74))
+    assert by_name["container"] == "📦 Likely" and by_name["line"] == "Maersk"
+
+    at_terminal = ship(name="BIANCA RAMBOW", ship_type=79, lat=53.5321, lon=9.9087, sog=0, nav_status=5)
+    guess = container_guess(at_terminal)
+    assert guess["container"] == "📦 Likely" and guess["line"] is None
+
+    sailing_past = ship(name="BIANCA RAMBOW", ship_type=79, lat=53.5321, lon=9.9087, sog=8.0, nav_status=0)
+    assert container_guess(sailing_past)["container"] == "❓ Unknown"   # only moored ships count
+
+    assert container_guess(ship(name="RIX TANGO", ship_type=70))["container"] == "❓ Unknown"
+    assert assess_ship(ship(name="MSC SINDY", ship_type=71, eta=eta_in(33)), NOW)["Shipping line"] == "MSC"
+
+
+# ---------------------------------------------------------------------------
+# Security: the collector must clean untrusted radio data
+# ---------------------------------------------------------------------------
+def test_collector_cleans_untrusted_data():
+    ships = {}
+    handle_message(ships, {
+        "MessageType": "ShipStaticData",
+        "MetaData": {"MMSI": "211000001"},
+        "Message": {"ShipStaticData": {
+            "Name": "<script>alert(1)</script>LONGER THAN TWENTY CHARACTERS",
+            "Destination": "deham\x1b[31m\n",
+            "Type": "not a number",
+            "ImoNumber": True,
+            "Eta": {"Month": "11", "Day": 2, "Hour": "evil", "Minute": 0, "Extra": "dropped"},
+        }},
+    })
+    s = ships["211000001"]
+    # "<" and "[" are real AIS characters, so they are kept here; app.py escapes them when showing them.
+    assert s["name"] == "<SCRIPT>ALERT(1)</SC"          # cut to the AIS maximum of 20 characters
+    assert s["destination"] == "DEHAM[31M"              # the invisible control character (ESC) and newline are gone
+    assert s["ship_type"] is None and s["imo"] is None  # bad numbers become "unknown"
+    assert s["eta"] == {"Month": 11, "Day": 2, "Hour": 0, "Minute": 0}
+
+    # Messages that are not what AISStream normally sends are ignored, not crashed on.
+    handle_message(ships, ["not", "a", "dict"])
+    handle_message(ships, {"MessageType": "PositionReport", "MetaData": {"MMSI": "x"}, "Message": {}})
+    handle_message(ships, {"MessageType": "PositionReport", "MetaData": {"MMSI": 211000002},
+                           "Message": {"PositionReport": {"Latitude": "NaN", "Longitude": 5}}})
+    assert set(ships) <= {"211000001", "211000002"}     # no ship was created from the bad MMSI "x"
+    assert "lat" not in ships.get("211000002", {})       # a "NaN" position is never saved

@@ -16,7 +16,8 @@ import pydeck as pdk
 import streamlit as st
 
 import config
-from risk import assess_all, is_bound_for_hamburg, parse_time
+from risk import assess_all, is_bound_for_hamburg, is_cargo_type, parse_time
+from safety import md, safe_link
 
 st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon="🚢", layout="wide")
 
@@ -79,15 +80,20 @@ with st.sidebar:
     cargo_only = st.checkbox("Cargo ships only (AIS type 70-79)", value=True,
                              help="Container ships report as cargo ships. Ships with unknown type are kept.")
     show_arrived = st.checkbox("Show ships already arriving", value=True)
+    containers_only = st.checkbox("Container ships only (likely)", value=False,
+                                  help="A guess from the ship's name (e.g. MSC, MAERSK) or its berth at a "
+                                       "container terminal. AIS does not say what a ship carries.")
 
 ships, source_label = load_live() if source == "Live data" else load_demo(now)
 ships = [s for s in ships if is_bound_for_hamburg(s.get("destination"))]
 if cargo_only:
-    ships = [s for s in ships if s.get("ship_type") in (None, 0) or 70 <= int(s["ship_type"]) <= 79]
+    ships = [s for s in ships if is_cargo_type(s.get("ship_type")) is not False]   # keeps unknown types
 
 rows = assess_all(ships, now, {"late_threshold_h": late_threshold, "stale_after_h": stale_after})
 if not show_arrived:
     rows = [r for r in rows if r["Flag"] != "⚪"]
+if containers_only:
+    rows = [r for r in rows if r["Container ship?"] == "📦 Likely"]
 df = pd.DataFrame(rows)
 
 # ---------------------------------------------------------------------------
@@ -104,11 +110,12 @@ if df.empty:
     st.warning("No ships heading to Hamburg in this data. Run the collector for longer (15+ minutes).")
     st.stop()
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Ships heading to Hamburg", len(df))
-c2.metric("🔴 Likely late", int((df["Flag"] == "🔴").sum()))
-c3.metric("🟡 Need checking", int((df["Flag"] == "🟡").sum()))
-c4.metric("🟢 On track", int((df["Flag"] == "🟢").sum()))
+c2.metric("📦 Likely container ships", int((df["Container ship?"] == "📦 Likely").sum()))
+c3.metric("🔴 Likely late", int((df["Flag"] == "🔴").sum()))
+c4.metric("🟡 Need checking", int((df["Flag"] == "🟡").sum()))
+c5.metric("🟢 On track", int((df["Flag"] == "🟢").sum()))
 
 # ---------------------------------------------------------------------------
 # Map
@@ -136,23 +143,36 @@ st.pydeck_chart(pdk.Deck(
 # Table
 # ---------------------------------------------------------------------------
 st.subheader("Ships and their arrival risk")
-table_cols = ["Flag", "Status", "Ship", "Where", "Distance (nm)", "Speed (kn)",
-              "Reported ETA", "Calculated ETA", "Difference (h)"]
+table_cols = ["Flag", "Status", "Ship", "Container ship?", "Shipping line", "Where", "Distance (nm)",
+              "Speed (kn)", "Reported ETA", "Calculated ETA", "Difference (h)"]
 st.dataframe(
     df[table_cols], hide_index=True, width="stretch",
-    column_config={"Difference (h)": st.column_config.NumberColumn(
-        help="Calculated ETA minus the ETA the crew reported. Positive = later than reported.")},
+    column_config={
+        "Difference (h)": st.column_config.NumberColumn(
+            help="Calculated ETA minus the ETA the crew reported. Positive = later than reported."),
+        "Container ship?": st.column_config.TextColumn(
+            help="A guess: AIS does not say what a ship carries. See the reason below the table."),
+        "Shipping line": st.column_config.TextColumn(
+            help="The carrier that runs the ship, guessed from its name. Container owners and cargo "
+                 "owners are not public."),
+    },
 )
 
-choice = st.selectbox("See the reasoning for one ship", df["Ship"].tolist())
-detail = df[df["Ship"] == choice].iloc[0]
+# Ship names can repeat, so we pick by row number and show the MMSI to tell them apart.
+choice = st.selectbox("See the reasoning for one ship", range(len(df)),
+                      format_func=lambda i: f"{df.iloc[i]['Ship']} (MMSI {df.iloc[i]['MMSI']})")
+detail = df.iloc[choice]
+# Every value that came from a ship's radio message goes through md() first (see safety.py).
 with st.container(border=True):
-    st.markdown(f"### {detail['Flag']} {detail['Ship']} · {detail['Status']}")
-    st.markdown(f"**Why:** {detail['Why']}")
-    st.markdown(f"**Route ahead:** {detail['Route ahead']}")
-    st.markdown(f"**Where it came from:** {detail['Route note']}")
-    st.caption(f"Destination typed by crew: `{detail['Destination typed']}` · Speed used: {detail['Speed used']} · "
-               f"Position age: {detail['Position age (h)']} h · MMSI {detail['MMSI']}")
+    st.markdown(f"### {detail['Flag']} {md(detail['Ship'])} · {md(detail['Status'])}")
+    st.markdown(f"**Why:** {md(detail['Why'])}")
+    st.markdown(f"**Container ship?** {detail['Container ship?']} · {md(detail['Container reason'])}")
+    if detail["Shipping line"] != "—":
+        st.markdown(f"**Shipping line (guessed from the name):** {md(detail['Shipping line'])}")
+    st.markdown(f"**Route ahead:** {md(detail['Route ahead'])}")
+    st.markdown(f"**Where it came from:** {md(detail['Route note'])}")
+    st.caption(f"Destination typed by crew: {md(detail['Destination typed'])} · Speed used: {md(detail['Speed used'])} · "
+               f"Position age: {md(detail['Position age (h)'])} h · MMSI {md(detail['MMSI'])}")
 
 # ---------------------------------------------------------------------------
 # Chokepoints
@@ -165,10 +185,11 @@ st.caption(f"Notes last reviewed by hand on {reviewed:%d %b %Y}.")
 if age_days > 14:
     st.warning(f"These notes are {age_days} days old. Update risk_zones.json.")
 for z in zones["zones"]:
-    with st.expander(f"{LEVEL_ICON.get(z['level'], '⚪')} {z['name']}: {z['status']}"):
-        st.write(z["effect"])
-        if z.get("source"):
-            st.markdown(f"[Source]({z['source']})")
+    with st.expander(f"{LEVEL_ICON.get(z['level'], '⚪')} {md(z['name'])}: {md(z['status'])}"):
+        st.markdown(md(z["effect"]))
+        link = safe_link(z.get("source"))      # only plain https:// links are shown
+        if link:
+            st.markdown(f"[Source]({link})")
 
 # ---------------------------------------------------------------------------
 # Honest limits
@@ -182,6 +203,9 @@ with st.expander("How this works, and its limits"):
    then the River Elbe at a lower speed, plus a short buffer for the pilot and berthing.
 4. Distance ÷ speed gives a **calculated ETA**. We compare it with the ETA the crew reported.
 5. A big gap, an old position or a stopped ship gets a flag.
+6. **Container ship?** AIS only says "cargo ship". We guess "container ship" when the name starts or ends
+   with a container line's word (for example `MSC`, `MAERSK`, `CMA CGM`, `EVER`) or when a cargo ship is
+   moored at a Hamburg container terminal (Waltershof, Altenwerder, Tollerort).
 
 **Limits**
 - This is a **risk flag, not a precise ETA prediction.** Ships change speed, wait for berths and follow tides.
@@ -189,4 +213,11 @@ with st.expander("How this works, and its limits"):
 - Crews type destination and ETA by hand. Some are wrong or out of date.
 - Routes are simplified waypoints, not exact shipping lanes.
 - Chokepoint notes are updated by hand, not live.
+- "Container ship" and "Shipping line" are **guesses**. Ships can be renamed or chartered to another line,
+  and some words (like `EXPRESS`) are also used by other ships. Terminal areas are approximate.
+- **Who owns the containers or the cargo is not public.** Containers are often leased from companies such as
+  Triton or Textainer, and cargo owners appear only in confidential shipping documents (bills of lading).
+  AIS never carries this information.
+- Ship names and destinations are typed by crews and can contain anything, so the dashboard shows them as
+  plain text only.
 """)

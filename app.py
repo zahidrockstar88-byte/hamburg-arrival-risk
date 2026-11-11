@@ -374,6 +374,8 @@ with tab_ships:
     choice = st.selectbox("Choose a ship", range(len(df)),
                           format_func=lambda i: f"{df.iloc[i]['Ship']} (MMSI {df.iloc[i]['MMSI']})")
     detail = df.iloc[choice]
+    # In a table, a missing size becomes NaN ("not a number"), which Python treats as true, so check it properly.
+    detail_teu = None if pd.isna(detail["teu"]) else int(detail["teu"])
     # Every value that came from a ship's radio message goes through md() first (see safety.py).
     with st.container(border=True):
         st.markdown(f"### {md(detail['Ship'])}")
@@ -398,11 +400,11 @@ with tab_ships:
         elif detail["Flag"] in (ARRIVED, IN_ANOTHER_PORT):
             st.caption("Already moored in Hamburg, or still in another port, so there is no berthing time to "
                        "plan from.")
-        elif not detail["teu"]:
+        elif detail_teu is None:
             st.caption("The ship's length isn't known yet (it arrives with the next data collection), so unloading "
                        "can't be estimated.")
         else:
-            plan = after_berth(detail["calc_eta_utc"], detail["teu"], warehouse_km)
+            plan = after_berth(detail["calc_eta_utc"], detail_teu, warehouse_km)
 
             def window(step: str) -> str:
                 earliest, latest = plan[step]
@@ -411,7 +413,7 @@ with tab_ships:
             fast_h, slow_h = plan["unloading_hours"]
             moves_low, moves_high = plan["moves"]
             st.markdown(md(
-                f"About {detail['teu']:,} TEU (estimated from its {detail['size_basis']}). If it berths at the "
+                f"About {detail_teu:,} TEU (estimated from its {detail['size_basis']}). If it berths at the "
                 f"calculated ETA, about {plan['cranes']:.0f} cranes on average unload its roughly {moves_low:,} to "
                 f"{moves_high:,} Hamburg containers in {max(fast_h, 1):.0f} to {max(slow_h, 1):.0f} hours."))
             st.markdown(md(f"First containers ready for pickup: {window('first_ready')}.") + "  \n" +
@@ -419,7 +421,7 @@ with tab_ships:
                         md(f"By rail: on a train from {window('on_a_train')}.") + "  \n" +
                         md(f"By truck to a warehouse {warehouse_km} km away: first from "
                            f"{nice_time(plan['at_warehouse_first'][0])}, all by {nice_time(plan['at_warehouse_all'][1])}."))
-            if detail["cost"] is not None:
+            if isinstance(detail["cost"], dict):
                 cost = detail["cost"]
                 st.markdown(md(f"Running about {cost['days'] * 24:.0f} h late costs roughly "
                                f"{money(*cost['total'])} ({money(*cost['ship'])} ship time, "

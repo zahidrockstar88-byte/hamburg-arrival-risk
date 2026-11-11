@@ -172,7 +172,21 @@ c4.metric("Need checking", int((df["Flag"] == "🟡").sum()), border=True,
           help="Waiting at anchor or at sea, no ETA sent, or position data too old.")
 c5.metric("On track", int((df["Flag"] == "🟢").sum()), border=True)
 
-tab_ships, tab_chokepoints, tab_method = st.tabs(["Vessels", "Chokepoints", "Method and limits"])
+# Latest disruptions, visible straight away: the newest headlines, near Hamburg first (full list in the tab).
+headlines, failed_feeds = cached_headlines()
+top_news = sorted(headlines, key=lambda item: item["where"] != "near")[:3]   # near Hamburg first, then newest
+with st.container(border=True):
+    st.markdown("**Latest disruptions** &nbsp; :gray-badge[News and disruptions tab for the full list]")
+    if not top_news:
+        st.caption("No disruptions on the way to Hamburg reported in the last few days.")
+    for headline in top_news:
+        # Headlines come from the internet: escaped with md(), links checked by safe_link() in news.py.
+        color = NEWS_KIND_COLOR.get(headline["kind"], "gray")
+        st.markdown(f":{color}-badge[{md(headline['kind'])}] :gray-badge[{md(headline['place'])}] &nbsp; "
+                    f"[{md(headline['title'])}]({headline['link']}) — "
+                    f"{md(headline['source'])}, {md(news_date(headline['published']))}")
+
+tab_ships, tab_news, tab_method = st.tabs(["Vessels", "News and disruptions", "Method and limits"])
 
 # ---------------------------------------------------------------------------
 # Vessels: map, table, one-ship detail
@@ -258,14 +272,13 @@ with tab_ships:
                    f"MMSI {md(detail['MMSI'])}")
 
 # ---------------------------------------------------------------------------
-# Chokepoints
+# News and disruptions, plus the hand-written chokepoint notes
 # ---------------------------------------------------------------------------
-with tab_chokepoints:
+with tab_news:
     st.subheader("Disruptions in the news")
     st.caption(f"Headlines from the last {MAX_AGE_DAYS} days about storms, strikes, closures, congestion, accidents "
                "and conflict on the way to Hamburg. Matched by keyword from maritime news sites and Google News "
                "(no AI), refreshed every 3 hours. Click a headline for the full article.")
-    headlines, failed_feeds = cached_headlines()
     groups = [("near", "Near Hamburg: can delay ships arriving in the next days"),
               ("route", "Further along the route")]
     for where, heading in groups:
@@ -319,7 +332,7 @@ with tab_method:
    with a container line's word (for example `MSC`, `MAERSK`, `CMA CGM`, `EVER`), or when a ship is moored
    at a Hamburg container terminal (Waltershof, Altenwerder, Tollerort). The table shows which clue was used.
    The **shipping line comes only from the name**; a berth tells us it is a container ship, not whose.
-7. **News** in the Chokepoints tab: headlines from maritime news sites and Google News (English and German).
+7. **News**, shown under "Latest disruptions" at the top and in full in the News and disruptions tab: headlines from maritime news sites and Google News (English and German).
    A headline is kept only if it names a place on the way to Hamburg **and** a disruption (storm, strike,
    closure, congestion, accident, attack), from the last 7 days. Plain keyword matching, no AI, so nothing is
    invented.

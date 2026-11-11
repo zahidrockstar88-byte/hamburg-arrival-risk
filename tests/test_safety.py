@@ -42,3 +42,12 @@ def test_only_https_links_are_allowed():
     assert safe_link("http://example.com") is None
     assert safe_link("https://example.com/a)(evil") is None
     assert safe_link("") is None and safe_link(None) is None
+
+
+def test_ais_not_available_codes_are_rejected():
+    from safety import COURSE_RANGE, SPEED_RANGE, clean_eta
+    assert to_float(102.3, *SPEED_RANGE) is None and to_float(14.5, *SPEED_RANGE) == 14.5
+    assert to_float(360, *COURSE_RANGE) is None and to_float(270, *COURSE_RANGE) == 270
+    assert clean_eta({"Month": 13, "Day": 32, "Hour": 25, "Minute": 61}) == {"Month": 0, "Day": 0, "Hour": 0, "Minute": 0}
+    assert clean_eta({"Month": 11, "Day": 2, "Hour": 6, "Minute": 30}) == {"Month": 11, "Day": 2, "Hour": 6, "Minute": 30}
+    assert clean_eta("not a dict") is None

@@ -73,9 +73,13 @@ AIS only says "cargo ship" (types 70–79). It never says what is on board. So t
 - **By name:** most big container ships carry their line's name: `MSC SINDY`, `MAERSK SEOUL`, `CMA CGM GEMINI`,
   `EVER GREET`. A list of about 15 container lines is in `config.py`. Whole words only, so `EVERGREEN SPIRIT`
   does not count as Evergreen.
-- **By berth:** a cargo ship moored at Waltershof (Burchardkai / Eurogate), Altenwerder or Tollerort is
-  almost certainly a container ship. This catches feeder ships with no line name.
-- A known non-cargo type (tug, ferry, tanker) is always "No", even if its name contains a line's word.
+- **By berth:** a cargo ship (or a ship with no reported type) moored at Waltershof (Burchardkai / Eurogate),
+  Altenwerder or Tollerort is almost certainly a container ship. This catches feeder ships with no line name.
+  The berth does **not** tell us the shipping line, so those ships show "—".
+- Weak words that other ships also use (`EXPRESS`, `ONE`) only count when the ship reports a cargo type.
+- A reported non-cargo type (tug, ferry, tanker) gives "Unlikely", even if the name contains a line's word.
+  It says "unlikely", not "no", because the crew sets the type and it can be wrong.
+- The table shows the clue: `📦 Likely (name: MSC)` or `📦 Likely (berth: Waltershof)`.
 
 ---
 
@@ -104,12 +108,14 @@ the flag is right, and lets me tune the 12-hour limit with data instead of a gue
 **"Can you see who owns the containers or the cargo?"**
 "No, and that's on purpose. Containers are often leased from companies like Triton or Textainer, and the
 cargo owner is only in the bill of lading, which is confidential. AIS never carries that. What I *can* show
-is the shipping line running the ship, guessed from its name or its berth, and I label it as a guess."
+is whether it's likely a container ship (from its name or its berth) and the shipping line running it
+(from its name), and I label both as guesses."
 
 **"Is it secure?"**
 "Ship names are typed by crews and sent by radio, so anyone can send anything. I treat all AIS text as
-untrusted: the collector keeps only characters the AIS standard allows and checks numbers are in range,
-and the dashboard escapes every ship value so it can't turn into a link. There are tests for both.
+untrusted: the collector keeps only characters the AIS standard allows and checks numbers are in their
+AIS range, saved data is checked again whenever it's loaded, and the dashboard escapes every ship value
+so it can't turn into a link. There are tests for both.
 The API key is never in the code, and the GitHub Action is pinned to exact versions."
 
 **"Who would use this?"**

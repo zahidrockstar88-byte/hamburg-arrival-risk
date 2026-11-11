@@ -17,7 +17,7 @@ import streamlit as st
 
 import config
 from risk import assess_all, is_bound_for_hamburg, is_cargo_type, parse_time
-from safety import md, safe_link
+from safety import clean_saved_ship, md, safe_link
 
 st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon="🚢", layout="wide")
 
@@ -53,7 +53,10 @@ def load_live() -> tuple[list[dict], str]:
         raw = json.load(f)
     updated = parse_time(raw.get("meta", {}).get("updated_utc"))
     label = f"Live AIS data, last collected {updated:%d %b %Y, %H:%M} UTC" if updated else "Live AIS data"
-    return list(raw.get("ships", {}).values()), label
+    # The file comes from radio data, so every ship is checked again before we use it (see safety.py).
+    saved = raw.get("ships", {})
+    ships = [clean_saved_ship(s) for s in (saved.values() if isinstance(saved, dict) else [])]
+    return [s for s in ships if s], label
 
 
 def load_zones() -> dict:
@@ -93,7 +96,7 @@ rows = assess_all(ships, now, {"late_threshold_h": late_threshold, "stale_after_
 if not show_arrived:
     rows = [r for r in rows if r["Flag"] != "⚪"]
 if containers_only:
-    rows = [r for r in rows if r["Container ship?"] == "📦 Likely"]
+    rows = [r for r in rows if r["container_likely"]]
 df = pd.DataFrame(rows)
 
 # ---------------------------------------------------------------------------
@@ -112,7 +115,7 @@ if df.empty:
 
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Ships heading to Hamburg", len(df))
-c2.metric("📦 Likely container ships", int((df["Container ship?"] == "📦 Likely").sum()))
+c2.metric("📦 Likely container ships", int(df["container_likely"].sum()))
 c3.metric("🔴 Likely late", int((df["Flag"] == "🔴").sum()))
 c4.metric("🟡 Need checking", int((df["Flag"] == "🟡").sum()))
 c5.metric("🟢 On track", int((df["Flag"] == "🟢").sum()))
@@ -164,9 +167,9 @@ choice = st.selectbox("See the reasoning for one ship", range(len(df)),
 detail = df.iloc[choice]
 # Every value that came from a ship's radio message goes through md() first (see safety.py).
 with st.container(border=True):
-    st.markdown(f"### {detail['Flag']} {md(detail['Ship'])} · {md(detail['Status'])}")
+    st.markdown(f"### {md(detail['Flag'])} {md(detail['Ship'])} · {md(detail['Status'])}")
     st.markdown(f"**Why:** {md(detail['Why'])}")
-    st.markdown(f"**Container ship?** {detail['Container ship?']} · {md(detail['Container reason'])}")
+    st.markdown(f"**Container ship?** {md(detail['Container ship?'])} · {md(detail['Container reason'])}")
     if detail["Shipping line"] != "—":
         st.markdown(f"**Shipping line (guessed from the name):** {md(detail['Shipping line'])}")
     st.markdown(f"**Route ahead:** {md(detail['Route ahead'])}")
@@ -204,8 +207,9 @@ with st.expander("How this works, and its limits"):
 4. Distance ÷ speed gives a **calculated ETA**. We compare it with the ETA the crew reported.
 5. A big gap, an old position or a stopped ship gets a flag.
 6. **Container ship?** AIS only says "cargo ship". We guess "container ship" when the name starts or ends
-   with a container line's word (for example `MSC`, `MAERSK`, `CMA CGM`, `EVER`) or when a cargo ship is
-   moored at a Hamburg container terminal (Waltershof, Altenwerder, Tollerort).
+   with a container line's word (for example `MSC`, `MAERSK`, `CMA CGM`, `EVER`), or when a ship is moored
+   at a Hamburg container terminal (Waltershof, Altenwerder, Tollerort). The table shows which clue was used.
+   The **shipping line comes only from the name**; a berth tells us it is a container ship, not whose.
 
 **Limits**
 - This is a **risk flag, not a precise ETA prediction.** Ships change speed, wait for berths and follow tides.
@@ -214,7 +218,9 @@ with st.expander("How this works, and its limits"):
 - Routes are simplified waypoints, not exact shipping lanes.
 - Chokepoint notes are updated by hand, not live.
 - "Container ship" and "Shipping line" are **guesses**. Ships can be renamed or chartered to another line,
-  and some words (like `EXPRESS`) are also used by other ships. Terminal areas are approximate.
+  and some words (like `EXPRESS` or `ONE`) are also used by other ships, so they only count for ships that
+  report a cargo type. "Unlikely" is based on the ship type the crew set, which can be wrong.
+  Terminal areas are approximate.
 - **Who owns the containers or the cargo is not public.** Containers are often leased from companies such as
   Triton or Textainer, and cargo owners appear only in confidential shipping documents (bills of lading).
   AIS never carries this information.

@@ -106,6 +106,10 @@ SHIPPING_LINE_NAMES = [
     ("start", "KOTA", "PIL"),
 ]
 
+# Words that other ships use too ("POLAR EXPRESS", "ONE WORLD"). They only count
+# when the ship has also reported a cargo ship type (70-79), not when the type is unknown.
+WEAK_LINE_WORDS = {"EXPRESS", "ONE"}
+
 # 2. Where the ship is moored. A cargo ship moored at a container terminal is
 #    almost certainly a container ship. Boxes are APPROXIMATE:
 #    ((south lat, west lon), (north lat, east lon)).

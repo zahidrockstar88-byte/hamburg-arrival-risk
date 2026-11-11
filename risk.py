@@ -208,24 +208,33 @@ def route_note(ship: dict) -> str:
 # and it never says who owns the containers or the cargo (that is in the
 # confidential bill of lading). So this is an educated GUESS, and we say so.
 
+# The three answers "Container ship?" can give. One place, so the app and the tests use the same words.
+CONTAINER_LIKELY = "📦 Likely"
+CONTAINER_UNKNOWN = "❓ Unknown"
+CONTAINER_UNLIKELY = "➖ Unlikely"
+
+
 def _name_words(name: str | None) -> list[str]:
-    """Split a ship name into words: 'CMA CGM  GEMINI' -> ['CMA', 'CGM', 'GEMINI']."""
-    return re.sub(r"[^A-Z0-9\- ]", " ", (name or "").upper()).split()
+    """
+    Split a ship name into words. Dots, hyphens and other symbols count as spaces:
+    'CMA CGM  GEMINI' -> ['CMA', 'CGM', 'GEMINI'],  'MAERSK-SEOUL' -> ['MAERSK', 'SEOUL'].
+    """
+    return re.sub(r"[^A-Z0-9]", " ", (name or "").upper()).split()
 
 
 def shipping_line(name: str | None) -> tuple[str, str] | None:
     """
     Guess the shipping line from the ship's name.
-    Returns (line, matched word) or None. Whole words only, so "EVERGREEN" does not match "EVER".
+    Returns (line name, matched word) or None. Whole words only, so "EVERGREEN" does not match "EVER".
     """
     words = _name_words(name)
-    for position, word, line in config.SHIPPING_LINE_NAMES:
-        pattern = word.split()
+    for position, word, line_name in config.SHIPPING_LINE_NAMES:
+        pattern = _name_words(word)               # "X-PRESS" -> ["X", "PRESS"], same rule as the name
         if len(words) <= len(pattern):            # the name must have something besides the line's word
             continue
-        part = words[: len(pattern)] if position == "start" else words[-len(pattern):]
-        if part == pattern:
-            return line, word
+        name_part = words[: len(pattern)] if position == "start" else words[-len(pattern):]
+        if name_part == pattern:
+            return line_name, word
     return None
 
 
@@ -249,33 +258,45 @@ def is_cargo_type(ship_type) -> bool | None:
         return None
 
 
+def is_moored(ship: dict) -> bool:
+    """True if the ship says it is moored (AIS status 5) or is not moving (under 0.5 knots)."""
+    sog = ship.get("sog")
+    return ship.get("nav_status") == 5 or (sog is not None and sog < 0.5)
+
+
 def container_guess(ship: dict) -> dict:
     """
     Decide 'Container ship?' for one ship, with the reason, in plain words.
     Rules, first match wins:
-      1. Known type that is not cargo (tug, ferry, tanker...)  -> No
-      2. Name starts/ends with a container line's word       -> Likely
-      3. Cargo ship moored at a container terminal           -> Likely
-      4. Anything else                                        -> Unknown
+      1. Reported type is not cargo (tug, ferry, tanker...)       -> Unlikely
+      2. Name starts/ends with a container line's word            -> Likely (line from the name)
+         (weak words like EXPRESS only count for reported cargo types)
+      3. Cargo or unknown-type ship moored at a container terminal -> Likely (line unknown)
+      4. Anything else                                             -> Unknown
+    Returns: label (shown in the table), likely (True/False), line (or None), reason.
     """
     cargo = is_cargo_type(ship.get("ship_type"))
-    line = shipping_line(ship.get("name"))
+    match = shipping_line(ship.get("name"))
 
     if cargo is False:
-        return {"container": "❌ No", "line": None,
-                "reason": f"AIS ship type {ship.get('ship_type')} is not a cargo ship."}
-    if line:
-        return {"container": "📦 Likely", "line": line[0],
-                "reason": f"The name contains \"{line[1]}\", a word used by {line[0]} container ships."}
+        return {"label": f"{CONTAINER_UNLIKELY} (type {ship.get('ship_type')})", "likely": False, "line": None,
+                "reason": f"The ship reports AIS type {ship.get('ship_type')}, which is not a cargo ship. "
+                          "Crews set this type themselves, so it can be wrong."}
 
-    sog = ship.get("sog")
-    moored = ship.get("nav_status") == 5 or (sog is not None and sog < 0.5)
+    if match:
+        line_name, matched_word = match
+        if matched_word not in config.WEAK_LINE_WORDS or cargo is True:
+            return {"label": f"{CONTAINER_LIKELY} (name: {matched_word})", "likely": True, "line": line_name,
+                    "reason": f"The name contains \"{matched_word}\", a word used by {line_name} container ships."}
+
     terminal = container_terminal(ship.get("lat"), ship.get("lon"))
-    if cargo and moored and terminal:
-        return {"container": "📦 Likely", "line": None,
-                "reason": f"Cargo ship moored at the {terminal} container terminal."}
+    if terminal and is_moored(ship):
+        kind = "Cargo ship" if cargo else "Ship with no reported type"
+        return {"label": f"{CONTAINER_LIKELY} (berth: {terminal.split(' (')[0]})", "likely": True, "line": None,
+                "reason": f"{kind} moored at the {terminal} container terminal. "
+                          "The berth does not tell us the shipping line."}
 
-    return {"container": "❓ Unknown", "line": None,
+    return {"label": CONTAINER_UNKNOWN, "likely": False, "line": None,
             "reason": "AIS does not say what a ship carries, and neither the name nor the berth gives a clue."}
 
 
@@ -348,9 +369,10 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
         "Flag": flag,
         "Status": label,
         "Ship": ship.get("name") or f"MMSI {ship.get('mmsi')}",
-        "Container ship?": container["container"],
+        "Container ship?": container["label"],
         "Shipping line": container["line"] or "—",
         "Container reason": container["reason"],
+        "container_likely": container["likely"],
         "Where": route["area"],
         "Distance (nm)": round(total_nm),
         "Speed (kn)": round(sog, 1) if sog is not None else None,

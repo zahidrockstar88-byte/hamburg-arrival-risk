@@ -28,18 +28,28 @@ from dotenv import load_dotenv
 
 import config
 from risk import is_bound_for_hamburg, sea_area
-from safety import clean_ais_text, to_float, to_int
+from safety import COURSE_RANGE, SPEED_RANGE, clean_ais_text, clean_eta, clean_saved_ship, to_float, to_int
 
 
 # ---------------------------------------------------------------------------
 # Saving and loading
 # ---------------------------------------------------------------------------
 def load_store() -> dict:
-    """Load ships saved by earlier runs, so data builds up over time."""
-    if config.LIVE_DATA_FILE.exists():
-        with open(config.LIVE_DATA_FILE, encoding="utf-8") as f:
-            return json.load(f).get("ships", {})
-    return {}
+    """
+    Load ships saved by earlier runs, so data builds up over time.
+    Each saved ship is checked again (safety.clean_saved_ship), because the file
+    may contain ships saved by an older version without these checks.
+    """
+    if not config.LIVE_DATA_FILE.exists():
+        return {}
+    with open(config.LIVE_DATA_FILE, encoding="utf-8") as f:
+        saved = json.load(f).get("ships", {})
+    ships = {}
+    for ship in (saved.values() if isinstance(saved, dict) else []):
+        clean = clean_saved_ship(ship)
+        if clean and clean["mmsi"]:
+            ships[clean["mmsi"]] = clean
+    return ships
 
 
 def save_store(ships: dict) -> int:
@@ -81,11 +91,9 @@ def _meta_value(meta: dict, *names):
     return None
 
 
-def _clean_eta(eta) -> dict | None:
-    """Keep only the four ETA numbers, as whole numbers. Anything else is dropped."""
-    if not isinstance(eta, dict):
-        return None
-    return {key: to_int(eta.get(key), 0, 60) or 0 for key in ("Month", "Day", "Hour", "Minute")}
+def _as_dict(value) -> dict:
+    """Return the value if it is a dictionary, otherwise an empty one (so .get() never crashes)."""
+    return value if isinstance(value, dict) else {}
 
 
 def handle_message(ships: dict, msg: dict) -> None:
@@ -97,9 +105,8 @@ def handle_message(ships: dict, msg: dict) -> None:
     if not isinstance(msg, dict):
         return
     kind = msg.get("MessageType")
-    meta = msg.get("MetaData") if isinstance(msg.get("MetaData"), dict) else {}
-    message = msg.get("Message") if isinstance(msg.get("Message"), dict) else {}
-    body = message.get(kind) if isinstance(message.get(kind), dict) else {}
+    meta = _as_dict(msg.get("MetaData"))
+    body = _as_dict(_as_dict(msg.get("Message")).get(kind))
 
     # MMSI = the ship's 9-digit radio ID. We use it as the key, so it must be a real number.
     mmsi = to_int(_meta_value(meta, "MMSI") or body.get("UserID"), 1, 999_999_999)
@@ -121,8 +128,8 @@ def handle_message(ships: dict, msg: dict) -> None:
         ship.update({
             "lat": round(lat, 5),
             "lon": round(lon, 5),
-            "sog": to_float(body.get("Sog"), 0, 102.3),     # speed over ground, knots
-            "cog": to_float(body.get("Cog"), 0, 360),       # course over ground, degrees
+            "sog": to_float(body.get("Sog"), *SPEED_RANGE),    # speed over ground, knots
+            "cog": to_float(body.get("Cog"), *COURSE_RANGE),   # course over ground, degrees
             "nav_status": to_int(body.get("NavigationalStatus"), 0, 15),
             "last_position_utc": now,
         })
@@ -138,7 +145,7 @@ def handle_message(ships: dict, msg: dict) -> None:
     elif kind == "ShipStaticData":
         ship.update({
             "destination": clean_ais_text(body.get("Destination"), "destination"),
-            "eta": _clean_eta(body.get("Eta")),                  # {"Month":..,"Day":..,"Hour":..,"Minute":..}
+            "eta": clean_eta(body.get("Eta")),                 # {"Month":..,"Day":..,"Hour":..,"Minute":..}
             "ship_type": to_int(body.get("Type"), 0, 99),        # 70-79 = cargo ships (incl. container ships)
             "imo": to_int(body.get("ImoNumber"), 1, 9_999_999),  # 7-digit ship ID
             "callsign": clean_ais_text(body.get("CallSign"), "callsign"),

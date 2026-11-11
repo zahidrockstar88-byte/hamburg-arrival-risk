@@ -19,8 +19,9 @@ sanity check catches the unrealistic ones early.
 3. Measures the distance left along the usual sea route (e.g. Gibraltar → Ushant → Dover Strait → Elbe).
 4. Calculates an ETA from distance and speed, with slower speed on the River Elbe and a pilot/berth buffer.
 5. Flags each ship: 🔴 likely late, 🟡 needs checking (old data, stopped, no ETA), 🟢 on track, ⚪ arriving.
-6. Guesses which ships are **container ships** and which **shipping line** runs them (MSC, Maersk, CMA CGM,
-   Evergreen, Hapag-Lloyd, ...), from the ship's name or its berth at a Hamburg container terminal.
+6. Guesses which ships are **container ships**, from the ship's name or its berth at a Hamburg container
+   terminal, and which **shipping line** runs them (MSC, Maersk, CMA CGM, Evergreen, Hapag-Lloyd, ...),
+   from the name only. The table shows which clue each guess is based on.
 7. Shows chokepoint risks on the way (Red Sea, Hormuz, North European congestion).
 
 ## Security
@@ -29,7 +30,8 @@ AIS messages are broadcast by radio, so anyone can send any text as a ship name 
 The project treats all of it as untrusted ([safety.py](safety.py)):
 
 - The collector keeps only characters the AIS standard allows, cuts text to its official length and checks
-  that numbers (ship type, IMO, position, speed) are real numbers in a valid range.
+  that numbers (ship type, IMO, position, speed, ETA) are real numbers in their AIS range.
+- Saved data is checked again every time it is loaded, so records from older versions are cleaned too.
 - The dashboard escapes every ship-supplied value, so a name like `[CLICK](HTTP://X.CO)` stays plain text.
 - Only `https://` links are shown for chokepoint sources.
 - The API key lives only in `.env` (ignored by git) and in encrypted GitHub Actions secrets.

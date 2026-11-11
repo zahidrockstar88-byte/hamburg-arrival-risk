@@ -10,8 +10,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from collector import handle_message  # noqa: E402
-from risk import (assess_ship, container_guess, container_terminal, distance_nm,  # noqa: E402
-                  is_bound_for_hamburg, parse_ais_eta, sea_area, shipping_line)
+from risk import (CONTAINER_LIKELY, CONTAINER_UNKNOWN, CONTAINER_UNLIKELY,  # noqa: E402
+                  assess_ship, container_guess, container_terminal, distance_nm, is_bound_for_hamburg,
+                  is_cargo_type, is_moored, parse_ais_eta, sea_area, shipping_line)
 
 NOW = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
 
@@ -102,6 +103,28 @@ def test_shipping_line_from_name():
     assert shipping_line(None) is None
 
 
+def test_shipping_line_ignores_punctuation_and_hyphens():
+    assert shipping_line("MAERSK-SEOUL")[0] == "Maersk"
+    assert shipping_line("HAMBURG-EXPRESS")[0] == "Hapag-Lloyd"
+    assert shipping_line("MSC.SINDY")[0] == "MSC"
+    assert shipping_line("X-PRESS MULHACEN")[0] == "X-Press Feeders"
+    assert shipping_line("X PRESS MULHACEN")[0] == "X-Press Feeders"
+
+
+def test_is_cargo_type():
+    assert is_cargo_type(70) is True and is_cargo_type(79) is True and is_cargo_type("74") is True
+    assert is_cargo_type(52) is False and is_cargo_type(80) is False
+    assert is_cargo_type(None) is None and is_cargo_type(0) is None      # 0 = "not reported"
+    assert is_cargo_type("abc") is None
+
+
+def test_is_moored_has_two_separate_triggers():
+    assert is_moored({"nav_status": 5, "sog": 3.0})        # says "moored", even if speed looks odd
+    assert is_moored({"nav_status": 0, "sog": 0.2})        # not moving
+    assert not is_moored({"nav_status": 0, "sog": 8.0})
+    assert not is_moored({"nav_status": 0, "sog": None})
+
+
 def test_container_terminal_areas():
     assert container_terminal(53.5399, 9.9070) == "Waltershof (Burchardkai / Eurogate)"   # where MSC SINDY moored
     assert container_terminal(53.505, 9.930) == "Altenwerder (CTA)"
@@ -110,21 +133,36 @@ def test_container_terminal_areas():
 
 
 def test_container_guess_rules():
-    tug = ship(name="MSC HELPER", ship_type=52)
-    assert container_guess(tug)["container"] == "❌ No"           # not a cargo type, even with a line's name
+    tug = container_guess(ship(name="MSC HELPER", ship_type=52))
+    assert tug["label"].startswith(CONTAINER_UNLIKELY) and not tug["likely"]   # not cargo, even with a line's name
 
     by_name = container_guess(ship(name="MAERSK SEOUL", ship_type=74))
-    assert by_name["container"] == "📦 Likely" and by_name["line"] == "Maersk"
+    assert by_name["label"] == f"{CONTAINER_LIKELY} (name: MAERSK)"           # the table shows the clue
+    assert by_name["likely"] and by_name["line"] == "Maersk"
 
-    at_terminal = ship(name="BIANCA RAMBOW", ship_type=79, lat=53.5321, lon=9.9087, sog=0, nav_status=5)
-    guess = container_guess(at_terminal)
-    assert guess["container"] == "📦 Likely" and guess["line"] is None
+    at_terminal = container_guess(ship(name="BIANCA RAMBOW", ship_type=79, lat=53.5321, lon=9.9087,
+                                       sog=0, nav_status=5))
+    assert at_terminal["label"] == f"{CONTAINER_LIKELY} (berth: Waltershof)"
+    assert at_terminal["likely"] and at_terminal["line"] is None             # a berth never gives the line
 
     sailing_past = ship(name="BIANCA RAMBOW", ship_type=79, lat=53.5321, lon=9.9087, sog=8.0, nav_status=0)
-    assert container_guess(sailing_past)["container"] == "❓ Unknown"   # only moored ships count
+    assert container_guess(sailing_past)["label"] == CONTAINER_UNKNOWN       # only moored ships count
 
-    assert container_guess(ship(name="RIX TANGO", ship_type=70))["container"] == "❓ Unknown"
-    assert assess_ship(ship(name="MSC SINDY", ship_type=71, eta=eta_in(33)), NOW)["Shipping line"] == "MSC"
+    assert container_guess(ship(name="RIX TANGO", ship_type=70))["label"] == CONTAINER_UNKNOWN
+    row = assess_ship(ship(name="MSC SINDY", ship_type=71, eta=eta_in(33)), NOW)
+    assert row["Shipping line"] == "MSC" and row["container_likely"] is True
+
+
+def test_unknown_type_ship_at_terminal_counts():
+    feeder = container_guess(ship(name="SMALL FEEDER", ship_type=None, lat=53.505, lon=9.930, sog=0, nav_status=5))
+    assert feeder["likely"] and "no reported type" in feeder["reason"]
+
+
+def test_weak_words_need_a_cargo_type():
+    assert container_guess(ship(name="POLAR EXPRESS", ship_type=None))["label"] == CONTAINER_UNKNOWN
+    assert container_guess(ship(name="ONE WORLD", ship_type=None))["label"] == CONTAINER_UNKNOWN
+    assert container_guess(ship(name="HAMBURG EXPRESS", ship_type=71))["line"] == "Hapag-Lloyd"
+    assert container_guess(ship(name="MSC MARIE", ship_type=None))["line"] == "MSC"   # strong words still count
 
 
 # ---------------------------------------------------------------------------
@@ -157,3 +195,27 @@ def test_collector_cleans_untrusted_data():
                            "Message": {"PositionReport": {"Latitude": "NaN", "Longitude": 5}}})
     assert set(ships) <= {"211000001", "211000002"}     # no ship was created from the bad MMSI "x"
     assert "lat" not in ships.get("211000002", {})       # a "NaN" position is never saved
+
+
+def test_old_saved_records_are_cleaned_when_loaded(tmp_path, monkeypatch):
+    # A file saved before the safety checks existed: messy name, text ship type, impossible ETA.
+    import json
+    import collector
+    import config
+    old = {"meta": {}, "ships": {
+        "211000003": {"mmsi": "211000003", "name": "hhla  i i i", "destination": "deham", "ship_type": "seventy",
+                      "lat": 53.54, "lon": 9.97, "sog": 102.3, "cog": 360,
+                      "eta": {"Month": 45, "Day": 50, "Hour": 24, "Minute": 60}},
+        "bad": {"mmsi": "bad", "lat": "nowhere", "lon": 1},
+    }}
+    path = tmp_path / "ships.json"
+    path.write_text(json.dumps(old))
+    monkeypatch.setattr(config, "LIVE_DATA_FILE", path)
+
+    ships = collector.load_store()
+    assert set(ships) == {"211000003"}                    # the record without a real position is dropped
+    s = ships["211000003"]
+    assert s["name"] == "HHLA I I I" and s["destination"] == "DEHAM"
+    assert s["ship_type"] is None
+    assert s["sog"] is None and s["cog"] is None          # 102.3 and 360 mean "not available" in AIS
+    assert s["eta"] == {"Month": 0, "Day": 0, "Hour": 24, "Minute": 60}   # impossible month/day -> "not set"

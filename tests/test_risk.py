@@ -137,12 +137,12 @@ def test_container_guess_rules():
     assert tug["label"].startswith(CONTAINER_UNLIKELY) and not tug["likely"]   # not cargo, even with a line's name
 
     by_name = container_guess(ship(name="MAERSK SEOUL", ship_type=74))
-    assert by_name["label"] == f"{CONTAINER_LIKELY} (name: MAERSK)"           # the table shows the clue
+    assert by_name["label"] == f"{CONTAINER_LIKELY} · name"           # the table shows the clue
     assert by_name["likely"] and by_name["line"] == "Maersk"
 
     at_terminal = container_guess(ship(name="BIANCA RAMBOW", ship_type=79, lat=53.5321, lon=9.9087,
                                        sog=0, nav_status=5))
-    assert at_terminal["label"] == f"{CONTAINER_LIKELY} (berth: Waltershof)"
+    assert at_terminal["label"] == f"{CONTAINER_LIKELY} · berth Waltershof"
     assert at_terminal["likely"] and at_terminal["line"] is None             # a berth never gives the line
 
     sailing_past = ship(name="BIANCA RAMBOW", ship_type=79, lat=53.5321, lon=9.9087, sog=8.0, nav_status=0)

@@ -209,9 +209,9 @@ def route_note(ship: dict) -> str:
 # confidential bill of lading). So this is an educated GUESS, and we say so.
 
 # The three answers "Container ship?" can give. One place, so the app and the tests use the same words.
-CONTAINER_LIKELY = "📦 Likely"
-CONTAINER_UNKNOWN = "❓ Unknown"
-CONTAINER_UNLIKELY = "➖ Unlikely"
+CONTAINER_LIKELY = "Likely"
+CONTAINER_UNKNOWN = "Unknown"
+CONTAINER_UNLIKELY = "Unlikely"
 
 
 def _name_words(name: str | None) -> list[str]:
@@ -279,20 +279,20 @@ def container_guess(ship: dict) -> dict:
     match = shipping_line(ship.get("name"))
 
     if cargo is False:
-        return {"label": f"{CONTAINER_UNLIKELY} (type {ship.get('ship_type')})", "likely": False, "line": None,
+        return {"label": f"{CONTAINER_UNLIKELY} · type {ship.get('ship_type')}", "likely": False, "line": None,
                 "reason": f"The ship reports AIS type {ship.get('ship_type')}, which is not a cargo ship. "
                           "Crews set this type themselves, so it can be wrong."}
 
     if match:
         line_name, matched_word = match
         if matched_word not in config.WEAK_LINE_WORDS or cargo is True:
-            return {"label": f"{CONTAINER_LIKELY} (name: {matched_word})", "likely": True, "line": line_name,
+            return {"label": f"{CONTAINER_LIKELY} · name", "likely": True, "line": line_name,
                     "reason": f"The name contains \"{matched_word}\", a word used by {line_name} container ships."}
 
     terminal = container_terminal(ship.get("lat"), ship.get("lon"))
     if terminal and is_moored(ship):
         kind = "Cargo ship" if cargo else "Ship with no reported type"
-        return {"label": f"{CONTAINER_LIKELY} (berth: {terminal.split(' (')[0]})", "likely": True, "line": None,
+        return {"label": f"{CONTAINER_LIKELY} · berth {terminal.split(' (')[0]}", "likely": True, "line": None,
                 "reason": f"{kind} moored at the {terminal} container terminal. "
                           "The berth does not tell us the shipping line."}
 

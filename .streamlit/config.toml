@@ -1,6 +1,34 @@
+# Look and feel of the dashboard. Colours: deep harbour blue on warm off-white paper.
 [theme]
 base = "light"
-primaryColor = "#1e5ac8"
+primaryColor = "#0E4D64"
+backgroundColor = "#FAF8F4"
+secondaryBackgroundColor = "#F1EEE7"
+textColor = "#1C2733"
+linkColor = "#0E4D64"
+borderColor = "#E2DDD2"
+showWidgetBorder = true
+baseRadius = "4px"
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+headingFont = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+headingFontWeights = [600, 600, 600, 500, 500, 500]
+metricValueFontWeight = 500
+redColor = "#B42318"
+orangeColor = "#B54708"
+yellowColor = "#B88A00"
+greenColor = "#2E7D4F"
+blueColor = "#0E4D64"
+
+[theme.sidebar]
+backgroundColor = "#0F2A3A"
+secondaryBackgroundColor = "#17394D"
+textColor = "#E6EDF2"
+borderColor = "#24495E"
+primaryColor = "#7FC4D6"
+
+[client]
+toolbarMode = "minimal"     # hides the developer menu for visitors
 
 [browser]
 gatherUsageStats = false

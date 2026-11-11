@@ -79,7 +79,7 @@ AIS only says "cargo ship" (types 70–79). It never says what is on board. So t
 - Weak words that other ships also use (`EXPRESS`, `ONE`) only count when the ship reports a cargo type.
 - A reported non-cargo type (tug, ferry, tanker) gives "Unlikely", even if the name contains a line's word.
   It says "unlikely", not "no", because the crew sets the type and it can be wrong.
-- The table shows the clue: `📦 Likely (name: MSC)` or `📦 Likely (berth: Waltershof)`.
+- The table shows the clue: `Likely · name` (with the line in the next column) or `Likely · berth Waltershof`.
 
 ---
 

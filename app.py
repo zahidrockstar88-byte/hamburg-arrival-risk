@@ -19,15 +19,30 @@ import config
 from risk import assess_all, is_bound_for_hamburg, is_cargo_type, parse_time
 from safety import clean_saved_ship, md, safe_link
 
-st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon="🚢", layout="wide")
+st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon=":material/anchor:", layout="wide")
 
-FLAG_COLORS = {          # map colours (red, green, blue, alpha)
-    "🔴": [214, 39, 40, 220],
-    "🟡": [230, 160, 0, 220],
-    "🟢": [44, 160, 44, 220],
-    "⚪": [120, 120, 120, 200],
+# How each risk flag looks: label, badge colour (Streamlit's colour names), map colour (red, green, blue, alpha).
+RISK_STYLE = {
+    "🔴": ("Likely late", "red", [180, 35, 24, 230]),
+    "🟡": ("Check", "orange", [201, 128, 0, 230]),
+    "🟢": ("On track", "green", [46, 125, 79, 230]),
+    "⚪": ("Arriving", "gray", [120, 128, 138, 200]),
 }
-LEVEL_ICON = {"high": "🔴", "medium": "🟡", "low": "🟢"}
+TEXT_COLOR = {"red": "#B42318", "orange": "#B54708", "green": "#2E7D4F", "gray": "#5F6B76"}
+LEVEL_STYLE = {"high": ":material/error:", "medium": ":material/warning:", "low": ":material/check_circle:"}
+REPO_URL = "https://github.com/zahidrockstar88-byte/hamburg-arrival-risk"
+
+# A few small style touches the theme can't do. Static text only: no ship data ever goes in here.
+st.html("""
+<style>
+  .block-container { padding-top: 2.2rem; max-width: 1400px; }
+  .kicker { font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase;
+            color: #0E4D64; font-weight: 600; margin-bottom: -0.6rem; }
+  [data-testid="stMetricValue"], [data-testid="stDataFrame"] { font-variant-numeric: tabular-nums; }
+  [data-testid="stMetricLabel"] p { font-size: 0.82rem; color: #4A5663; }
+  h3 { margin-top: 0.4rem; }
+</style>
+""")
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +67,7 @@ def load_live() -> tuple[list[dict], str]:
     with open(config.LIVE_DATA_FILE, encoding="utf-8") as f:
         raw = json.load(f)
     updated = parse_time(raw.get("meta", {}).get("updated_utc"))
-    label = f"Live AIS data, last collected {updated:%d %b %Y, %H:%M} UTC" if updated else "Live AIS data"
+    label = f"Live AIS data · collected {updated:%d %b %Y, %H:%M} UTC" if updated else "Live AIS data"
     # The file comes from radio data, so every ship is checked again before we use it (see safety.py).
     saved = raw.get("ships", {})
     ships = [clean_saved_ship(s) for s in (saved.values() if isinstance(saved, dict) else [])]
@@ -64,6 +79,12 @@ def load_zones() -> dict:
         return json.load(f)
 
 
+def badge(flag: str) -> str:
+    """A coloured label for a risk flag, e.g. ':red-badge[Likely late]'. Only fixed words go inside."""
+    label, color, _ = RISK_STYLE.get(flag, ("Unknown", "gray", None))
+    return f":{color}-badge[{label}]"
+
+
 # ---------------------------------------------------------------------------
 # Sidebar: choices
 # ---------------------------------------------------------------------------
@@ -71,21 +92,27 @@ now = datetime.now(timezone.utc)
 live_available = config.LIVE_DATA_FILE.exists()
 
 with st.sidebar:
-    st.header("Settings")
+    st.subheader("Data")
     options = (["Live data", "Demo data"] if live_available else ["Demo data"])
-    source = st.radio("Data source", options)
+    source = st.radio("Source", options, label_visibility="collapsed")
     if not live_available:
         st.caption("No live data yet. Run `python collector.py` to collect some.")
 
+    st.subheader("Rules")
     late_threshold = st.slider("Flag as late when the difference is more than (hours)", 3, 48,
                                config.LATE_THRESHOLD_HOURS)
     stale_after = st.slider("Treat positions as too old after (hours)", 2, 72, config.STALE_AFTER_HOURS)
+
+    st.subheader("Show")
     cargo_only = st.checkbox("Cargo ships only (AIS type 70-79)", value=True,
                              help="Container ships report as cargo ships. Ships with unknown type are kept.")
-    show_arrived = st.checkbox("Show ships already arriving", value=True)
+    show_arrived = st.checkbox("Ships already arriving", value=True)
     containers_only = st.checkbox("Container ships only (likely)", value=False,
                                   help="A guess from the ship's name (e.g. MSC, MAERSK) or its berth at a "
                                        "container terminal. AIS does not say what a ship carries.")
+    st.divider()
+    st.caption("Calculated ETA = distance along the sea route ÷ speed. "
+               "It is a risk flag, not a forecast.")
 
 ships, source_label = load_live() if source == "Live data" else load_demo(now)
 ships = [s for s in ships if is_bound_for_hamburg(s.get("destination"))]
@@ -102,104 +129,137 @@ df = pd.DataFrame(rows)
 # ---------------------------------------------------------------------------
 # Header and key numbers
 # ---------------------------------------------------------------------------
-st.title("🚢 Hamburg Arrival Risk Monitor")
-st.caption(f"Container and cargo ships heading to the Port of Hamburg · {source_label} · "
-           f"page loaded {now:%d %b %Y, %H:%M} UTC")
+st.html('<div class="kicker">Port of Hamburg · Inbound vessels</div>')
+st.title("Arrival Risk Monitor")
+st.markdown("Cargo and container ships on their way to Hamburg, and whether the arrival time each crew "
+            "reports actually fits the distance still to go.")
+st.caption(f"{source_label} · page loaded {now:%d %b %Y, %H:%M} UTC")
 if source == "Demo data":
     st.info("You are looking at **demo data**: invented ships that show how each flag works. "
-            "Switch to live data in the sidebar once you have run the collector.")
+            "Switch to live data in the sidebar.", icon=":material/science:")
 
 if df.empty:
-    st.warning("No ships heading to Hamburg in this data. Run the collector for longer (15+ minutes).")
+    st.warning("No ships heading to Hamburg in this data. Run the collector for longer (15+ minutes).",
+               icon=":material/sailing:")
     st.stop()
 
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Ships heading to Hamburg", len(df))
-c2.metric("📦 Likely container ships", int(df["container_likely"].sum()))
-c3.metric("🔴 Likely late", int((df["Flag"] == "🔴").sum()))
-c4.metric("🟡 Need checking", int((df["Flag"] == "🟡").sum()))
-c5.metric("🟢 On track", int((df["Flag"] == "🟢").sum()))
+c1.metric("Inbound to Hamburg", len(df), border=True)
+c2.metric("Likely container ships", int(df["container_likely"].sum()), border=True,
+          help="A guess from the ship's name or its berth. See Method and limits.")
+c3.metric("Likely late", int((df["Flag"] == "🔴").sum()), border=True,
+          help=f"Calculated ETA is more than {late_threshold} h after the ETA the crew reported.")
+c4.metric("Need checking", int((df["Flag"] == "🟡").sum()), border=True,
+          help="Stopped, no ETA sent, or position data too old.")
+c5.metric("On track", int((df["Flag"] == "🟢").sum()), border=True)
+
+tab_ships, tab_chokepoints, tab_method = st.tabs(["Vessels", "Chokepoints", "Method and limits"])
 
 # ---------------------------------------------------------------------------
-# Map
+# Vessels: map, table, one-ship detail
 # ---------------------------------------------------------------------------
-map_df = df.copy()
-map_df["color"] = map_df["Flag"].map(FLAG_COLORS)
-ship_layer = pdk.Layer(
-    "ScatterplotLayer", data=map_df, get_position="[lon, lat]", get_fill_color="color",
-    get_radius=18000, radius_min_pixels=5, radius_max_pixels=14, pickable=True,
-)
-hamburg_layer = pdk.Layer(
-    "ScatterplotLayer", data=pd.DataFrame([{"lat": config.HAMBURG[0], "lon": config.HAMBURG[1],
-                                            "Ship": "Port of Hamburg", "Status": "", "Calculated ETA": ""}]),
-    get_position="[lon, lat]", get_fill_color=[30, 90, 200, 255], get_radius=25000,
-    radius_min_pixels=7, pickable=True,
-)
-st.pydeck_chart(pdk.Deck(
-    layers=[ship_layer, hamburg_layer],
-    map_provider="carto", map_style="light",   # free background map, no account needed
-    initial_view_state=pdk.ViewState(latitude=47, longitude=-2, zoom=3.3),
-    tooltip={"text": "{Ship}\n{Status}\nCalculated ETA: {Calculated ETA}"},
-), height=430)
+with tab_ships:
+    st.markdown(" ".join(badge(f) for f in RISK_STYLE) + " &nbsp; :blue-badge[Port of Hamburg]")
 
-# ---------------------------------------------------------------------------
-# Table
-# ---------------------------------------------------------------------------
-st.subheader("Ships and their arrival risk")
-table_cols = ["Flag", "Status", "Ship", "Container ship?", "Shipping line", "Where", "Distance (nm)",
-              "Speed (kn)", "Reported ETA", "Calculated ETA", "Difference (h)"]
-st.dataframe(
-    df[table_cols], hide_index=True, width="stretch",
-    column_config={
-        "Difference (h)": st.column_config.NumberColumn(
-            help="Calculated ETA minus the ETA the crew reported. Positive = later than reported."),
-        "Container ship?": st.column_config.TextColumn(
-            help="A guess: AIS does not say what a ship carries. See the reason below the table."),
-        "Shipping line": st.column_config.TextColumn(
-            help="The carrier that runs the ship, guessed from its name. Container owners and cargo "
-                 "owners are not public."),
-    },
-)
+    map_df = df.copy()
+    map_df["color"] = map_df["Flag"].map(lambda f: RISK_STYLE[f][2])
+    ship_layer = pdk.Layer(
+        "ScatterplotLayer", data=map_df, get_position="[lon, lat]", get_fill_color="color",
+        get_line_color=[255, 255, 255, 220], line_width_min_pixels=1, stroked=True,
+        get_radius=16000, radius_min_pixels=5, radius_max_pixels=13, pickable=True,
+    )
+    hamburg_layer = pdk.Layer(
+        "ScatterplotLayer", data=pd.DataFrame([{"lat": config.HAMBURG[0], "lon": config.HAMBURG[1],
+                                                "Ship": "Port of Hamburg", "Status": "", "Calculated ETA": "—"}]),
+        get_position="[lon, lat]", get_fill_color=[14, 77, 100, 255], get_line_color=[255, 255, 255, 255],
+        line_width_min_pixels=2, stroked=True, get_radius=22000, radius_min_pixels=8, pickable=True,
+    )
+    st.pydeck_chart(pdk.Deck(
+        layers=[ship_layer, hamburg_layer],
+        map_provider="carto", map_style="light",   # free background map, no account needed
+        initial_view_state=pdk.ViewState(latitude=50.5, longitude=1.5, zoom=4.1),
+        # "text" (not "html") so ship names are always shown as plain text.
+        tooltip={"text": "{Ship}\n{Status}\nCalculated ETA: {Calculated ETA}",
+                 "style": {"backgroundColor": "#0F2A3A", "color": "#E6EDF2", "fontSize": "12px"}},
+    ), height=440)
 
-# Ship names can repeat, so we pick by row number and show the MMSI to tell them apart.
-choice = st.selectbox("See the reasoning for one ship", range(len(df)),
-                      format_func=lambda i: f"{df.iloc[i]['Ship']} (MMSI {df.iloc[i]['MMSI']})")
-detail = df.iloc[choice]
-# Every value that came from a ship's radio message goes through md() first (see safety.py).
-with st.container(border=True):
-    st.markdown(f"### {md(detail['Flag'])} {md(detail['Ship'])} · {md(detail['Status'])}")
-    st.markdown(f"**Why:** {md(detail['Why'])}")
-    st.markdown(f"**Container ship?** {md(detail['Container ship?'])} · {md(detail['Container reason'])}")
-    if detail["Shipping line"] != "—":
-        st.markdown(f"**Shipping line (guessed from the name):** {md(detail['Shipping line'])}")
-    st.markdown(f"**Route ahead:** {md(detail['Route ahead'])}")
-    st.markdown(f"**Where it came from:** {md(detail['Route note'])}")
-    st.caption(f"Destination typed by crew: {md(detail['Destination typed'])} · Speed used: {md(detail['Speed used'])} · "
-               f"Position age: {md(detail['Position age (h)'])} h · MMSI {md(detail['MMSI'])}")
+    st.subheader("Vessel list")
+    table = df.assign(Risk=df["Flag"].map(lambda f: RISK_STYLE[f][0]))
+    table_cols = ["Risk", "Status", "Ship", "Container ship?", "Shipping line", "Where", "Distance (nm)",
+                  "Speed (kn)", "Reported ETA", "Calculated ETA", "Difference (h)"]
+    risk_colors = {label: TEXT_COLOR[color] for label, color, _ in RISK_STYLE.values()}
+    styled = table[table_cols].style.map(
+        lambda v: f"color: {risk_colors.get(v, '#1C2733')}; font-weight: 600", subset=["Risk"])
+    st.dataframe(
+        styled, hide_index=True, width="stretch",
+        column_config={
+            "Distance (nm)": st.column_config.NumberColumn(format="%d"),
+            "Speed (kn)": st.column_config.NumberColumn(format="%.1f"),
+            "Difference (h)": st.column_config.NumberColumn(
+                format="%+d",
+                help="Calculated ETA minus the ETA the crew reported. Positive = later than reported."),
+            "Container ship?": st.column_config.TextColumn(
+                help="A guess: AIS does not say what a ship carries. See the reason in the vessel detail."),
+            "Shipping line": st.column_config.TextColumn(
+                help="The carrier that runs the ship, guessed from its name. Container owners and cargo "
+                     "owners are not public."),
+        },
+    )
+
+    st.subheader("Vessel detail")
+    # Ship names can repeat, so we pick by row number and show the MMSI to tell them apart.
+    choice = st.selectbox("Choose a vessel", range(len(df)), label_visibility="collapsed",
+                          format_func=lambda i: f"{df.iloc[i]['Ship']}  ·  MMSI {df.iloc[i]['MMSI']}")
+    detail = df.iloc[choice]
+    # Every value that came from a ship's radio message goes through md() first (see safety.py).
+    with st.container(border=True):
+        st.markdown(f"### {md(detail['Ship'])}")
+        st.markdown(f"{badge(detail['Flag'])} &nbsp; {md(detail['Status'])}")
+        left, right = st.columns(2, gap="large")
+        with left:
+            st.markdown(f"**Why**  \n{md(detail['Why'])}")
+            st.markdown(f"**Route ahead**  \n{md(detail['Route ahead'])}")
+            st.markdown(f"**Where it came from**  \n{md(detail['Route note'])}")
+        with right:
+            verdict = detail["Container ship?"].split(" · ")[0]     # "Likely", "Unknown" or "Unlikely"
+            st.markdown(f"**Container ship?**  \n{md(verdict)}. {md(detail['Container reason'])}")
+            if detail["Shipping line"] != "—":
+                st.markdown(f"**Shipping line** (guessed from the name)  \n{md(detail['Shipping line'])}")
+            st.markdown(f"**Reported ETA** {md(detail['Reported ETA'])}  \n"
+                        f"**Calculated ETA** {md(detail['Calculated ETA'])}")
+        st.caption(f"Destination typed by crew: {md(detail['Destination typed'])} · Speed used: "
+                   f"{md(detail['Speed used'])} · Position age: {md(detail['Position age (h)'])} h · "
+                   f"MMSI {md(detail['MMSI'])}")
 
 # ---------------------------------------------------------------------------
 # Chokepoints
 # ---------------------------------------------------------------------------
-zones = load_zones()
-st.subheader("Chokepoints and risks on the way to Hamburg")
-reviewed = datetime.fromisoformat(zones["last_reviewed"]).replace(tzinfo=timezone.utc)
-age_days = (now - reviewed).days
-st.caption(f"Notes last reviewed by hand on {reviewed:%d %b %Y}.")
-if age_days > 14:
-    st.warning(f"These notes are {age_days} days old. Update risk_zones.json.")
-for z in zones["zones"]:
-    with st.expander(f"{LEVEL_ICON.get(z['level'], '⚪')} {md(z['name'])}: {md(z['status'])}"):
-        st.markdown(md(z["effect"]))
-        link = safe_link(z.get("source"))      # only plain https:// links are shown
-        if link:
-            st.markdown(f"[Source]({link})")
+with tab_chokepoints:
+    zones = load_zones()
+    reviewed = datetime.fromisoformat(zones["last_reviewed"]).replace(tzinfo=timezone.utc)
+    age_days = (now - reviewed).days
+    st.markdown("Places on the way to Hamburg where conflict, closures or congestion change routes and "
+                "arrival times. These notes are written by hand, not live.")
+    st.caption(f"Last reviewed {reviewed:%d %b %Y}.")
+    if age_days > 14:
+        st.warning(f"Last reviewed {age_days} days ago. Check recent news before relying on these notes.",
+                   icon=":material/schedule:")
+    for z in zones["zones"]:
+        with st.expander(f"{md(z['name'])} — {md(z['status'])}",
+                         icon=LEVEL_STYLE.get(z["level"], ":material/help:")):
+            st.markdown(md(z["effect"]))
+            link = safe_link(z.get("source"))      # only plain https:// links are shown
+            if link:
+                st.markdown(f"[Source]({link})")
 
 # ---------------------------------------------------------------------------
 # Honest limits
 # ---------------------------------------------------------------------------
-with st.expander("How this works, and its limits"):
-    st.markdown("""
-**How it works**
+with tab_method:
+    how, limits = st.columns(2, gap="large")
+    with how:
+        st.subheader("How it works")
+        st.markdown("""
 1. Ships broadcast their position, speed, destination and ETA by radio (AIS). The data comes from AISStream.io.
 2. We keep ships whose destination means Hamburg (for example `HAMBURG`, `DEHAM`, `NLRTM>DEHAM`).
 3. We measure the distance along the usual sea route (for example Gibraltar → Ushant → Dover Strait → Elbe),
@@ -210,8 +270,10 @@ with st.expander("How this works, and its limits"):
    with a container line's word (for example `MSC`, `MAERSK`, `CMA CGM`, `EVER`), or when a ship is moored
    at a Hamburg container terminal (Waltershof, Altenwerder, Tollerort). The table shows which clue was used.
    The **shipping line comes only from the name**; a berth tells us it is a container ship, not whose.
-
-**Limits**
+""")
+    with limits:
+        st.subheader("Limits")
+        st.markdown("""
 - This is a **risk flag, not a precise ETA prediction.** Ships change speed, wait for berths and follow tides.
 - Free AIS data comes from land-based receivers. Coverage is good near Europe and weak far out at sea.
 - Crews type destination and ETA by hand. Some are wrong or out of date.
@@ -227,3 +289,10 @@ with st.expander("How this works, and its limits"):
 - Ship names and destinations are typed by crews and can contain anything, so the dashboard shows them as
   plain text only.
 """)
+
+# ---------------------------------------------------------------------------
+# Footer
+# ---------------------------------------------------------------------------
+st.divider()
+st.caption(f"Built by Mohammad Zahid Abbas · M.Sc. International Logistics & Transportation Management, "
+           f"UE Hamburg · Ship data: [AISStream.io](https://aisstream.io) · [Source code]({REPO_URL})")

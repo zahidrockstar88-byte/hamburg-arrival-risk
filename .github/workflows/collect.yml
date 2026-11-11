@@ -46,8 +46,8 @@ jobs:
           python eta_model.py
           git add model/eta_model.json
           git commit -m "Retrain ETA model" || echo "No changes"
+      # Runs after a successful collection, even if retraining failed (continue-on-error above).
       - name: Upload
-        if: always()
         run: |
           git pull --rebase    # pick up any code changes pushed while we were collecting
           git push

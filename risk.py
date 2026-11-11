@@ -261,7 +261,12 @@ def is_cargo_type(ship_type) -> bool | None:
 
 
 def is_moored(ship: dict) -> bool:
-    """True if the ship says it is moored (AIS status 5) or is not moving (under 0.5 knots)."""
+    """
+    True if the ship says it is moored (AIS status 5), or is not moving (under 0.5 knots) and is NOT at anchor.
+    An anchored ship (AIS status 1) is waiting, not moored, even inside the port (GLOSSARY.md: Arrived, Waiting).
+    """
+    if ship.get("nav_status") == 1:
+        return False
     sog = ship.get("sog")
     return ship.get("nav_status") == 5 or (sog is not None and sog < 0.5)
 
@@ -314,6 +319,8 @@ def container_guess(ship: dict) -> dict:
 #   ⚫ In another port (moored elsewhere, working cargo: normal)   ⚪ Arriving (final approach)   🔵 Arrived (moored in Hamburg)
 FLAG_ORDER = {"🔴": 0, "🟡": 1, "🟢": 2, "⚫": 3, "⚪": 4, "🔵": 5}
 ARRIVAL_FLAGS = ("⚪", "🔵")      # ships at or very close to Hamburg: nothing left to judge
+NO_ETA_TO_JUDGE = ARRIVAL_FLAGS + ("⚫",)   # ...plus ships still in another port (departure time unknown)
+CHART_FLAGS = ("🔴", "🟡", "🟢", "⚫")      # ships still to come, shown on the approach chart
 
 
 def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None = None) -> dict:
@@ -350,8 +357,13 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
 
     # --- Decide the flag (first rule that matches wins) ---
     near_hamburg = total_nm <= config.ARRIVED_WITHIN_NM
+    at_anchor = ship.get("nav_status") == 1
     if near_hamburg and moored_here:
         flag, label, reason = "🔵", "Arrived", "Ship is moored in the Port of Hamburg."
+    elif near_hamburg and at_anchor:
+        flag, label = "🟡", "Waiting"
+        reason = ("Ship is at anchor close to Hamburg, probably waiting for a berth, the tide or a pilot. "
+                  "It has not arrived until it is moored.")
     elif near_hamburg:
         flag, label, reason = "⚪", "Arriving", "Ship is on its final approach, close to the Port of Hamburg."
     elif age_h > s["stale_after_h"]:

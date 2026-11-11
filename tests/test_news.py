@@ -90,3 +90,12 @@ def test_city_news_is_not_a_shipping_disruption():
     assert classify("Houthi missile attack in the Red Sea") is not None          # attack in a conflict zone
     assert classify("Warnstreik im Hamburger Hafen")["kind"] == "Strike"          # maritime place word
     assert classify("Head-on collision of two cargo ships blocks the Kiel Canal")["place"] == "Kiel Canal"
+
+
+def test_airline_pilots_are_not_port_pilots_and_sea_storms_count():
+    # Code review: an airline strike got through, and a plain North Sea storm warning was dropped.
+    assert classify("Lufthansa pilots strike in Hamburg") is None
+    assert classify("Elbe pilots strike halts Hamburg port traffic")["kind"] == "Strike"
+    assert classify("North Sea storm warning")["kind"] == "Weather"
+    assert classify("Gale warning for the English Channel")["place"] == "English Channel"
+    assert classify("Elbe flood hits Dresden old town") is None          # still not about ships

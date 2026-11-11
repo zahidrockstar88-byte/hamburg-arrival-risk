@@ -13,6 +13,7 @@ centrepiece is the approach to Hamburg: every ship placed by its distance to the
 from __future__ import annotations
 
 import json
+from typing import NamedTuple
 from datetime import datetime, timezone
 
 import altair as alt
@@ -23,7 +24,8 @@ import streamlit as st
 import config
 from eta_model import load_model, ml_eta_for
 from news import MAX_AGE_DAYS, latest_headlines
-from risk import ARRIVAL_FLAGS, assess_all, is_bound_for_hamburg, is_cargo_type, nice_time, parse_time
+from risk import (ARRIVAL_FLAGS, CHART_FLAGS, assess_all, is_bound_for_hamburg, is_cargo_type, nice_time,
+                  parse_time)
 from safety import clean_saved_ship, md, safe_link
 
 st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon=":material/anchor:", layout="wide")
@@ -31,13 +33,21 @@ st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon=":materi
 # Colours, checked with the dataviz skill's colour-blind validator. Red and green are told apart by
 # shape as well (square can, triangle cone), the way buoys are on the river.
 NAVY, CHART_WHITE, WATER, RULE = "#12324A", "#F4F8F9", "#E3EEF2", "#C9DAE1"
-RISK_STYLE = {   # flag: label, badge colour (Streamlit name), text colour, map colour (RGBA), marker shape
-    "🔴": ("Likely late", "red", "#C1272D", [193, 39, 45, 235], "square"),
-    "🟡": ("Check", "orange", "#8A6100", [224, 168, 0, 235], "diamond"),
-    "🟢": ("On track", "green", "#00866E", [0, 134, 110, 235], "triangle-up"),
-    "⚫": ("In another port", "gray", "#5E7180", [138, 154, 166, 210], "circle"),
-    "⚪": ("Arriving", "blue", "#0F5C80", [15, 92, 128, 220], "circle"),
-    "🔵": ("Arrived", "primary", NAVY, [18, 50, 74, 220], "circle"),
+class RiskStyle(NamedTuple):
+    label: str          # the word shown to people
+    badge: str          # Streamlit badge colour name
+    text_color: str     # colour for the word in the table
+    map_rgba: list      # dot colour on the map (red, green, blue, opacity)
+    shape: str          # marker shape on the approach chart
+
+
+RISK_STYLE = {   # flag code (from risk.py) -> how it looks
+    "🔴": RiskStyle("Likely late", "red", "#C1272D", [193, 39, 45, 235], "square"),
+    "🟡": RiskStyle("Check", "orange", "#8A6100", [224, 168, 0, 235], "diamond"),
+    "🟢": RiskStyle("On track", "green", "#00866E", [0, 134, 110, 235], "triangle-up"),
+    "⚫": RiskStyle("In another port", "gray", "#5E7180", [138, 154, 166, 210], "circle"),
+    "⚪": RiskStyle("Arriving", "blue", "#0F5C80", [15, 92, 128, 220], "circle"),
+    "🔵": RiskStyle("Arrived", "primary", NAVY, [18, 50, 74, 220], "circle"),
 }
 MARK_COLOR = {"🔴": "#C1272D", "🟡": "#E0A800", "🟢": "#00866E", "⚫": "#8A9AA6"}   # chart marks only
 LEVEL_STYLE = {"high": ":material/error:", "medium": ":material/warning:", "low": ":material/check_circle:"}
@@ -45,7 +55,7 @@ REPO_URL = "https://github.com/zahidrockstar88-byte/hamburg-arrival-risk"
 
 # Landmarks on the approach, as distance to the berth along the route (nm), from risk.route_to_hamburg().
 LANDMARKS = [("Gibraltar", 1529), ("Ushant", 685), ("Dover Strait", 376), ("Elbe 1", 75),
-             ("Brunsbüttel", 38), ("Wedel", 11), ("Berth", 0)]
+             ("Cuxhaven", 52), ("Brunsbüttel", 38), ("Wedel", 11), ("Berth", 0)]
 
 # A few small style touches the theme can't do. Static text only: no ship data ever goes in here.
 st.html("""
@@ -54,6 +64,9 @@ st.html("""
   h1 { line-height: 1.05; letter-spacing: -0.01em; max-width: 32ch; }
   [data-testid="stDataFrame"], [data-testid="stVegaLiteChart"] { font-variant-numeric: tabular-nums; }
   .stMarkdown p { max-width: 78ch; }
+  a:focus-visible, button:focus-visible, [role="tab"]:focus-visible, input:focus-visible {
+    outline: 2px solid #0F5C80; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 """)
 
@@ -96,17 +109,28 @@ def ml_accuracy(model: dict | None) -> str:
     """One line comparing the ML ETA's measured error with the calculated ETA's, shown wherever ML ETAs appear."""
     if not model or model["model_mae_h"] is None or model["calculated_mae_h"] is None:
         return "The ML ETA needs more arrivals before its accuracy can be measured."
-    verdict = ("more accurate" if model["model_mae_h"] < model["calculated_mae_h"]
-               else "not more accurate yet, so trust the calculated ETA")
+    verdict = "more accurate" if ml_is_better(model) else "not more accurate yet, so trust the calculated ETA"
     return (f"The experimental ML ETA is off by {model['model_mae_h']:.1f} h on average, against "
             f"{model['calculated_mae_h']:.1f} h for the calculated ETA ({verdict}). "
             f"It learned from {model['ships']} ships.")
 
 
+def headline_markdown(headline: dict) -> str:
+    """One news headline as text: kind, place, linked title. Escaped with md(); the link was checked in news.py."""
+    return (f":gray-badge[{md(headline['kind'])}] **{md(headline['place'])}.** "
+            f"[{md(headline['title'])}]({headline['link']})")
+
+
+def ml_is_better(model: dict | None) -> bool:
+    """True when the ML ETA's measured error is smaller than the calculated ETA's."""
+    return bool(model and model["model_mae_h"] is not None and model["calculated_mae_h"] is not None
+                and model["model_mae_h"] < model["calculated_mae_h"])
+
+
 def badge(flag: str) -> str:
     """A coloured label for a risk flag, e.g. ':red-badge[Likely late]'. Only fixed words go inside."""
-    label, color = RISK_STYLE.get(flag, ("Unknown", "gray"))[:2]
-    return f":{color}-badge[{label}]"
+    style = RISK_STYLE.get(flag)
+    return f":{style.badge}-badge[{style.label}]" if style else ":gray-badge[Unknown]"
 
 
 def headline_sentence(late: int, total: int) -> str:
@@ -122,11 +146,12 @@ def approach_chart(df: pd.DataFrame) -> alt.LayerChart:
     The approach to Hamburg: one lane per risk, every ship placed by its distance to the berth
     (log scale, so the river is readable next to the open sea). The berth is on the right.
     """
-    lanes = [f for f in ("🔴", "🟡", "🟢", "⚫") if (df["Flag"] == f).any()]
+    lanes = [f for f in CHART_FLAGS if (df["Flag"] == f).any()]
     ships = df[df["Flag"].isin(lanes)].copy()
-    lane_names = [f"{RISK_STYLE[f][0]} ({(df['Flag'] == f).sum()})" for f in lanes]
-    # Each lane is a row number (0 = top). A small fixed offset per ship (from its MMSI) keeps ships at the
-    # same spot from hiding each other.
+    lane_names = [f"{RISK_STYLE[f].label} ({(df['Flag'] == f).sum()})" for f in lanes]
+    # Each lane is a row number (0 = top). Ships at the same distance would sit on top of each other, so each
+    # one is nudged up or down a little. The nudge comes from the ship's MMSI number (its remainder after
+    # dividing by 97), so the same ship always gets the same nudge and the chart doesn't jump on every reload.
     ships["Row"] = ships["Flag"].map(lanes.index) + ships["MMSI"].map(
         lambda m: ((int(m) % 97) / 97 - 0.5) * 0.5 if str(m).isdigit() else 0.0)
     ships["Miles"] = ships["Distance (nm)"].clip(lower=0)
@@ -134,7 +159,9 @@ def approach_chart(df: pd.DataFrame) -> alt.LayerChart:
     far = max(1600, int(ships["Miles"].max() or 0) + 100)
     x = alt.X("Miles:Q", title=None, axis=None,
               scale=alt.Scale(type="symlog", constant=20, domain=[far, 0]))
-    label_expr = "[" + ",".join(f"'{name}'" for name in lane_names) + "][datum.value]"   # fixed words only
+    # The chart library draws the lane names from a tiny JavaScript list, e.g. ['Likely late (5)','Check (9)'][row].
+    # Only our own fixed words and counts go into it, never ship data.
+    label_expr = "[" + ",".join(f"'{name}'" for name in lane_names) + "][datum.value]"
     y = alt.Y("Row:Q", title=None, scale=alt.Scale(domain=[len(lanes) - 0.45, -0.55], nice=False),
               axis=alt.Axis(values=list(range(len(lanes))), labelExpr=label_expr, grid=False, ticks=False,
                             domain=False, labelFontSize=15, labelColor=NAVY, labelPadding=14,
@@ -145,17 +172,20 @@ def approach_chart(df: pd.DataFrame) -> alt.LayerChart:
         color=alt.Color("Flag:N", legend=None,
                         scale=alt.Scale(domain=list(MARK_COLOR), range=list(MARK_COLOR.values()))),
         shape=alt.Shape("Flag:N", legend=None,
-                        scale=alt.Scale(domain=list(MARK_COLOR), range=[RISK_STYLE[f][4] for f in MARK_COLOR])),
+                        scale=alt.Scale(domain=list(MARK_COLOR), range=[RISK_STYLE[f].shape for f in MARK_COLOR])),
         tooltip=[alt.Tooltip("Ship:N"), alt.Tooltip("Status:N"),
                  alt.Tooltip("Distance (nm):Q", title="Distance to berth (nm)"),
                  alt.Tooltip("Calculated ETA:N"), alt.Tooltip("Reported ETA:N")],
     )
     marks_df = pd.DataFrame(LANDMARKS, columns=["Name", "Miles"])
     rules = alt.Chart(marks_df).mark_rule(color=RULE, strokeWidth=1).encode(x=x)
-    names = alt.Chart(marks_df).mark_text(align="center", baseline="bottom", color="#45627A", fontSize=12,
-                                          font="Barlow", dy=-8).encode(x=x, y=alt.value(0), text="Name:N")
-    return (alt.layer(rules, marks, names)
-            .properties(height=62 * len(lanes) + 10, padding={"top": 28, "left": 6, "right": 22, "bottom": 6})
+    upper = marks_df[marks_df["Name"].isin(["Elbe 1", "Brunsbüttel", "Berth"])]       # second label row
+    lower = marks_df[~marks_df["Name"].isin(upper["Name"])]
+    label = dict(align="center", baseline="bottom", color="#45627A", fontSize=12, font="Barlow")
+    names_low = alt.Chart(lower).mark_text(dy=-6, **label).encode(x=x, y=alt.value(0), text="Name:N")
+    names_high = alt.Chart(upper).mark_text(dy=-22, **label).encode(x=x, y=alt.value(0), text="Name:N")
+    return (alt.layer(rules, marks, names_low, names_high)
+            .properties(height=62 * len(lanes) + 10, padding={"top": 42, "left": 6, "right": 22, "bottom": 6})
             .configure(font="Barlow", background=CHART_WHITE)
             .configure_view(fill=WATER, stroke=None))
 
@@ -194,12 +224,12 @@ if cargo_only:
 
 rows = assess_all(ships, now, {"late_threshold_h": late_threshold, "stale_after_h": stale_after})
 if not show_arrived:
-    rows = [r for r in rows if r["Flag"] not in ARRIVAL_FLAGS]
+    rows = [row for row in rows if row["Flag"] not in ARRIVAL_FLAGS]
 if containers_only:
-    rows = [r for r in rows if r["container_likely"]]
+    rows = [row for row in rows if row["container_likely"]]
 model = load_model()
-for r in rows:
-    r["ML ETA (experimental)"] = nice_time(ml_eta_for(r, model))      # "—" when there is none
+for row in rows:
+    row["ML ETA (experimental)"] = nice_time(ml_eta_for(row, model))      # "—" when there is none
 df = pd.DataFrame(rows)
 
 # ---------------------------------------------------------------------------
@@ -214,13 +244,13 @@ if df.empty:
 def count(flag: str) -> int:
     return int((df["Flag"] == flag).sum())
 
-st.title(headline_sentence(count("🔴"), len(df)))
-st.markdown(f"{count('🟡')} need a closer look, {count('🟢')} are on track, {count('⚫')} are still in another "
+st.title(md(headline_sentence(count("🔴"), len(df))))
+st.markdown(md(f"{count('🟡')} need a closer look, {count('🟢')} are on track, {count('⚫')} are still in another "
             f"port and {count('⚪') + count('🔵')} have reached or are reaching Hamburg. "
-            f"{int(df['container_likely'].sum())} of the {len(df)} are likely container ships.")
-st.caption(f"Ship positions collected {updated:%d %b %Y at %H:%M} UTC." if updated else "Ship positions from AIS.")
+            f"{int(df['container_likely'].sum())} of the {len(df)} are likely container ships."))
+st.caption(md(f"Ship positions collected {updated:%d %b %Y at %H:%M} UTC." if updated else "Ship positions from AIS."))
 
-if any(df["Flag"].isin(["🔴", "🟡", "🟢", "⚫"])):
+if df["Flag"].isin(CHART_FLAGS).any():
     st.altair_chart(approach_chart(df), width="stretch", theme=None)
     st.caption("Distance to the berth along the sea route, on a log scale so the river and the open sea both fit. "
                "Hover over a ship for its name and ETAs.")
@@ -230,11 +260,10 @@ headlines, failed_feeds = cached_headlines()
 top_news = sorted(headlines, key=lambda item: item["where"] != "near")[:3]   # near Hamburg first, then newest
 st.subheader("What could hold ships up")
 if not top_news:
-    st.caption("No disruptions on the way to Hamburg reported in the last few days.")
+    st.caption(f"No disruptions on the way to Hamburg reported in the last {MAX_AGE_DAYS} days.")
 for headline in top_news:
     # Headlines come from the internet: escaped with md(), links checked by safe_link() in news.py.
-    st.markdown(f":gray-badge[{md(headline['kind'])}] **{md(headline['place'])}.** "
-                f"[{md(headline['title'])}]({headline['link']}) "
+    st.markdown(f"{headline_markdown(headline)} "
                 f"({md(headline['source'])}, {md(news_date(headline['published']))})")
 
 tab_ships, tab_news, tab_method = st.tabs(["Ships", "News and disruptions", "How it works"])
@@ -246,7 +275,7 @@ with tab_ships:
     st.markdown(" ".join(badge(f) for f in RISK_STYLE) + " &nbsp; :gray-badge[Port of Hamburg]")
 
     map_df = df.copy()
-    map_df["color"] = map_df["Flag"].map(lambda f: RISK_STYLE[f][3])
+    map_df["color"] = map_df["Flag"].map(lambda f: RISK_STYLE[f].map_rgba)
     ship_layer = pdk.Layer(
         "ScatterplotLayer", data=map_df, get_position="[lon, lat]", get_fill_color="color",
         get_line_color=[244, 248, 249, 255], line_width_min_pixels=1.5, stroked=True,
@@ -268,10 +297,10 @@ with tab_ships:
     ), height=440)
 
     st.subheader("Every ship")
-    table = df.assign(Risk=df["Flag"].map(lambda f: RISK_STYLE[f][0]))
+    table = df.assign(Risk=df["Flag"].map(lambda f: RISK_STYLE[f].label))
     table_cols = ["Risk", "Status", "Ship", "Container ship?", "Shipping line", "Where", "Distance (nm)",
                   "Speed (kn)", "Reported ETA", "Calculated ETA", "Difference (h)", "ML ETA (experimental)"]
-    risk_colors = {style[0]: style[2] for style in RISK_STYLE.values()}
+    risk_colors = {style.label: style.text_color for style in RISK_STYLE.values()}
     styled = table[table_cols].style.map(
         lambda v: f"color: {risk_colors.get(v, NAVY)}; font-weight: 600", subset=["Risk"])
     st.dataframe(
@@ -333,13 +362,12 @@ with tab_news:
               ("route", "Further along the route")]
     for where, heading in groups:
         st.markdown(f"**{heading}**")
-        group = [h for h in headlines if h["where"] == where]
+        group = [headline for headline in headlines if headline["where"] == where]
         if not group:
             st.caption("Nothing reported.")
-        for h in group:
-            # Headlines come from the internet: escaped with md(), links checked by safe_link() in news.py.
-            st.markdown(f":gray-badge[{md(h['kind'])}] **{md(h['place'])}.** [{md(h['title'])}]({h['link']})")
-            st.caption(f"{md(h['source'])}, {md(news_date(h['published']))}")
+        for headline in group:
+            st.markdown(headline_markdown(headline))
+            st.caption(f"{md(headline['source'])}, {md(news_date(headline['published']))}")
     if failed_feeds:
         st.caption(f"Could not reach: {md(', '.join(failed_feeds))}.")
 
@@ -353,11 +381,11 @@ with tab_news:
     if age_days > 14:
         st.warning(f"Last reviewed {age_days} days ago. Check recent news before relying on these notes.",
                    icon=":material/schedule:")
-    for z in zones["zones"]:
-        with st.expander(f"{md(z['name'])}: {md(z['status'])}",
-                         icon=LEVEL_STYLE.get(z["level"], ":material/help:")):
-            st.markdown(md(z["effect"]))
-            link = safe_link(z.get("source"))      # only plain https:// links are shown
+    for zone in zones["zones"]:
+        with st.expander(f"{md(zone['name'])}: {md(zone['status'])}",
+                         icon=LEVEL_STYLE.get(zone["level"], ":material/help:")):
+            st.markdown(md(zone["effect"]))
+            link = safe_link(zone.get("source"))      # only plain https:// links are shown
             if link:
                 st.markdown(f"[Source]({link})")
 
@@ -389,19 +417,21 @@ with tab_method:
         st.subheader("Experimental ML estimate")
         if model:
             a, b, c = model["coefficients"]
-            better = (model["model_mae_h"] is not None and model["calculated_mae_h"] is not None
-                      and model["model_mae_h"] < model["calculated_mae_h"])
             # The model file is written by a bot (see eta_model.load_model), so its values go through md() too.
             st.markdown(
                 f"A straight-line model learned from **{md(model['ships'])} ships** ({md(model['examples'])} "
                 f"examples) that we saw at sea and later saw moored in Hamburg, across {md(model['snapshots'])} "
-                f"data snapshots:  \nreal hours ≈ {a:.2f} × calculated hours + {b:.1f} if stopped + {c:.1f}")
-            st.markdown("Tested fairly: each ship is predicted by a model that never saw it.  \n"
-                        + ("**" if not better else "") + md(ml_accuracy(model)) + ("**" if not better else ""))
+                f"data snapshots:  \nreal hours ≈ {a:.2f} × calculated hours "
+                f"+ {b:.1f} if the ship is not moving (waiting or in another port) + {c:.1f}")
+            accuracy = md(ml_accuracy(model))
+            if not ml_is_better(model):
+                accuracy = f"**{accuracy}**"          # stand out when the plain calculation is the better one
+            st.markdown(f"Tested fairly: each ship is predicted by a model that never saw it.  \n{accuracy}")
             trained = f"{model['trained_utc']:%d %b %Y, %H:%M} UTC" if model["trained_utc"] else "unknown"
             st.caption(f"Retrained automatically after each data collection. Last trained {md(trained)}. "
                        "Arrival times are only known to within ~3 hours (the gap between snapshots), and only "
-                       "ships seen arriving while we were collecting count, so long trips are under-represented.")
+                       "ships seen at sea and later moored in Hamburg while we were collecting count, so long trips are "
+                       "under-represented.")
         else:
             st.markdown("Not enough ships have been seen arriving yet to train a model.")
     with limits:

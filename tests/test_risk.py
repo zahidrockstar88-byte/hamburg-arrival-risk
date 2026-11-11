@@ -257,3 +257,12 @@ def test_values_handed_to_the_ml_model():
     assert abs((row["calc_eta_utc"] - expected).total_seconds()) < 60   # calc_hours is rounded to 2 decimals
     waiting = assess_ship(ship(sog=0.2, nav_status=1, eta=eta_in(30)), NOW)
     assert waiting["stopped"] is True
+
+
+def test_anchored_ship_near_hamburg_is_waiting_not_arrived():
+    # Code review: a ship at anchor on the river near Hamburg had been shown as "Arrived".
+    anchored = assess_ship(ship(lat=53.6, lon=9.7, sog=0.0, nav_status=1, eta=eta_in(2)), NOW)
+    assert anchored["Status"] == "Waiting" and anchored["Flag"] == "🟡"
+    assert not is_moored({"nav_status": 1, "sog": 0.0})              # at anchor is never "moored"
+    moored = assess_ship(ship(lat=53.6, lon=9.7, sog=0.0, nav_status=5, eta=eta_in(2)), NOW)
+    assert moored["Status"] == "Arrived"

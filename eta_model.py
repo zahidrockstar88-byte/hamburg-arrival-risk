@@ -38,7 +38,7 @@ from pathlib import Path
 import numpy as np
 
 import config
-from risk import ARRIVAL_FLAGS, assess_ship, parse_time
+from risk import ARRIVAL_FLAGS, NO_ETA_TO_JUDGE, assess_ship, parse_time
 from safety import clean_saved_ship
 
 MODEL_FILE = config.PROJECT_DIR / "model" / "eta_model.json"
@@ -196,7 +196,7 @@ def ml_eta_for(row: dict, model: dict | None) -> datetime | None:
     The experimental ML ETA for one dashboard row, or None when there is no model or nothing to estimate
     (the ship is arriving, has arrived, or is still in another port with an unknown departure time).
     """
-    if not model or row["Flag"] in ARRIVAL_FLAGS or row["Flag"] == "⚫":
+    if not model or row["Flag"] in NO_ETA_TO_JUDGE:
         return None
     predicted = predict_hours(model["coefficients"], row["calc_hours"], row["stopped"])
     return row["calc_eta_utc"] + timedelta(hours=predicted - row["calc_hours"])
@@ -207,12 +207,12 @@ def main() -> None:
     MODEL_FILE.parent.mkdir(exist_ok=True)
     with open(MODEL_FILE, "w", encoding="utf-8") as f:
         json.dump(model, f, indent=1)
-    print(f"Snapshots: {model['snapshots']} · examples: {model['examples']} · ships: {model['ships']}")
+    print(f"Snapshots: {model['snapshots']}, examples: {model['examples']}, ships: {model['ships']}")
     if model["coefficients"] is None:
         print(f"Not trained: need at least {MIN_SHIPS_TO_TRAIN} ships that were seen at sea and then arriving.")
     else:
         a, b, c = model["coefficients"]
-        print(f"Model: real hours = {a:.2f} × calculated hours + {b:.1f} if stopped + {c:.1f}")
+        print(f"Model: real hours = {a:.2f} × calculated hours + {b:.1f} if not moving + {c:.1f}")
     print(f"Average error (leave one ship out): model {model['model_mae_h']} h, "
           f"calculated ETA {model['calculated_mae_h']} h")
 

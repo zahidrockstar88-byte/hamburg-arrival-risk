@@ -8,7 +8,8 @@ How it works:
      Kiel Canal, North Sea, nearby ports, the Channel, Red Sea...) AND a DISRUPTION
      (storm, fog, strike, closure, congestion, collision, attack...) AND is about ships
      (a shipping word like "port", "vessel", "Hafen", or a maritime place like "HHLA").
-     Attacks in conflict zones like the Red Sea or Hormuz count without a shipping word.
+     Attacks in conflict zones like the Red Sea or Hormuz, and storms at sea (North Sea,
+     Channel), count without a shipping word.
   3. Keep only the last few days, newest first, grouped into "near Hamburg"
      (can delay ships arriving in the next days) and "further along the route".
 
@@ -73,6 +74,7 @@ PLACES = {
     "Gibraltar / Cape route": ("route", ["gibraltar", "cape of good hope", "cape route", "bay of biscay"]),
 }
 CONFLICT_PLACES = {"Red Sea / Suez", "Strait of Hormuz"}     # news there matters even without a disruption word
+SEA_PLACES = {"North Sea / German Bight", "English Channel"}    # weather there always affects ships
 
 # What kind of disruption a headline is about (English and German words).
 DISRUPTIONS = {        # checked in this order: the first kind that matches wins
@@ -100,19 +102,22 @@ MARITIME_PLACE_WORDS = ["hamburger hafen", "hafen hamburg", "port of hamburg", "
 # Words that show a headline is about ships or ports.
 SHIPPING_CONTEXT = ["port", "ports", "harbour", "harbor", "ship", "ships", "shipping", "vessel", "vessels",
                     "container", "containers", "cargo", "freighter", "tanker", "tankers", "carrier", "carriers",
-                    "terminal", "terminals", "berth", "dock", "docks", "dockworkers", "dockers", "pilot", "pilots",
-                    "lock", "locks", "canal", "transit", "transits", "seafarers", "crew", "maritime", "navigation",
-                    "hafen", "häfen", "schiff", "schiffe", "schifffahrt", "frachter", "frachtschiff", "reederei",
-                    "containerschiff", "terminal", "lotsen", "schleuse", "liegeplatz"]
+                    "terminal", "terminals", "berth", "dock", "docks", "dockworkers", "dockers", "harbour pilots",
+                    "harbor pilots", "maritime pilots", "river pilots", "elbe pilots", "lock", "locks", "canal",
+                    "transit", "transits", "seafarers", "crew", "maritime", "navigation", "hafen", "häfen", "schiff",
+                    "schiffe", "schifffahrt", "frachter", "frachtschiff", "reederei", "containerschiff", "lotsen",
+                    "schleuse", "liegeplatz"]
 
 # A strike only delays ships if it hits the port itself: docks, terminals, pilots, locks.
 STRIKE_CONTEXT = ["port", "ports", "dock", "docks", "dockworkers", "dockers", "longshore", "terminal", "terminals",
-                  "pilot", "pilots", "lock", "locks", "hafen", "häfen", "hafenarbeiter", "lotsen", "schleuse"]
+                  "harbour pilots", "harbor pilots", "maritime pilots", "river pilots", "elbe pilots", "lock", "locks",
+                  "hafen", "häfen", "hafenarbeiter", "lotsen", "schleuse"]
 
 # Headlines with these words are about something else (oil platforms, cruises, sport...), not cargo ship delays.
 OFF_TOPIC = ["platform", "oilfield", "oil field", "gas field", "rig", "offshore worker", "offshore workers",
              "cruise", "kreuzfahrt", "football", "bundesliga", "hsv", "st. pauli", "marathon", "concert",
-             "airport", "flughafen", "flights", "flüge", "hockey", "eishockey", "coral", "reef"]
+             "airport", "flughafen", "flights", "flüge", "airline", "airlines", "lufthansa", "eurowings", "condor",
+             "cockpit", "hockey", "eishockey", "coral", "reef"]
 
 USER_AGENT = "HamburgArrivalRiskMonitor/1.0 (+https://github.com/zahidrockstar88-byte/hamburg-arrival-risk)"
 TIMEOUT_SECONDS = 10
@@ -148,8 +153,9 @@ def classify(title: str) -> dict | None:
     if kind is None and place not in CONFLICT_PLACES:
         return None                                    # e.g. "Hamburg port reports record year": not a disruption
     conflict_news = place in CONFLICT_PLACES and kind == "Conflict / security"
+    weather_at_sea = place in SEA_PLACES and kind == "Weather"      # e.g. "North Sea storm warning"
     about_shipping = _mentions(lowered, MARITIME_PLACE_WORDS) or _mentions(lowered, SHIPPING_CONTEXT)
-    if not (conflict_news or about_shipping):
+    if not (conflict_news or weather_at_sea or about_shipping):
         return None                                    # e.g. "Elbe flood hits Dresden": not about ships
     if kind == "Strike" and not _mentions(lowered, STRIKE_CONTEXT):
         return None                                    # e.g. bus drivers or oil workers striking: ships still sail

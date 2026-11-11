@@ -117,3 +117,56 @@ CONTAINER_TERMINALS = {
     "Altenwerder (CTA)": ((53.495, 9.915), (53.515, 9.945)),
     "Tollerort (CTT)": ((53.538, 9.935), (53.548, 9.960)),
 }
+
+# ---------------------------------------------------------------------------
+# Carrier reliability (procurement view)
+# ---------------------------------------------------------------------------
+# A ship is "on time" if it berthed within this many hours of the ETA it first reported to us.
+# 24 h (one day either way) is the usual industry tolerance for schedule reliability.
+ON_TIME_TOLERANCE_HOURS = 24
+# Below this many arrivals a carrier's percentage is not shown: too few to mean anything.
+MIN_ARRIVALS_FOR_SCORE = 3
+
+# ---------------------------------------------------------------------------
+# After the berth: unloading and pickup (all ranges are low, high)
+# ---------------------------------------------------------------------------
+# Ship size in TEU from its length (m). Rule of thumb from typical container-ship classes
+# (feeder ~150 m / 1,000 TEU ... ultra-large ~400 m / 20,000+ TEU). Not a sourced table.
+TEU_BY_LENGTH_M = [(120, 500), (150, 1000), (175, 1700), (200, 2500), (230, 3500), (260, 4500),
+                   (300, 8000), (335, 10000), (366, 14000), (400, 20000)]
+# No draught fallback on purpose: ships report their CURRENT draught, so a part-loaded ship looks too small.
+
+# Hamburg is one stop in a loop of ports, so only part of the ship is unloaded here.
+# Assumption (not sourced): 10-25 % of the ship's capacity is unloaded in Hamburg.
+UNLOAD_SHARE_RANGE = (0.10, 0.25)
+TEU_PER_MOVE = 1.65            # one crane move lifts ~1.65 TEU on average (mix of 20 ft and 40 ft boxes)
+
+# Quay cranes working one ship, by ship size (TEU up to, cranes). Assumption from typical deployment.
+CRANES_BY_TEU = [(1500, 2), (3000, 3), (8000, 4), (14000, 5), (99999, 6)]
+# Moves per crane per hour. Top terminals reach ~40 (Port Technology berth productivity ranking);
+# we use a lower, more typical range because no HHLA figure is published.
+CRANE_MOVES_PER_HOUR = (25, 35)
+# Ceiling for one ship: about 3,500 moves a day is a realistic maximum for an ultra-large ship
+# in North Europe (Dynamar, via Seatrade Maritime).
+MAX_MOVES_PER_SHIP_PER_HOUR = 3500 / 24
+
+START_UNLOADING_AFTER_BERTH_H = (0.5, 1.5)   # mooring, lashing, gangway (assumption)
+READY_FOR_PICKUP_AFTER_UNLOAD_H = (2, 6)     # stacking in the yard and release (assumption; customs pre-cleared)
+TRUCK_SPEED_KMH = (30, 50)                   # average speed from the terminal, incl. port traffic (assumption)
+TERMINAL_GATE_H = (0.5, 1.5)                 # truck gate-in, loading and gate-out (assumption)
+DEFAULT_WAREHOUSE_KM = 30                    # a typical warehouse in the Hamburg area (changeable in the sidebar)
+
+# ---------------------------------------------------------------------------
+# Cost of delay (US dollars, because the charter indices are in dollars)
+# ---------------------------------------------------------------------------
+# Daily cost of the ship's time = time-charter rate, by ship size (TEU up to, low, high).
+# Source: New ConTex charter index, Aug-Oct 2026: 1,700 TEU ~$33,900/day; 2,500 TEU ~$37,000-39,000;
+# 2,700 TEU ~$40,000; 4,250 TEU ~$58,000-59,500 (DynaLiners Sept 2026, Container News, VHBS).
+# The index stops at 6,500 TEU: rates for bigger ships are our ESTIMATE, flagged as such on the page.
+SHIP_COST_PER_DAY_USD = [(2000, 30000, 36000, "New ConTex"), (3000, 36000, 41000, "New ConTex"),
+                         (5000, 50000, 60000, "New ConTex"), (8000, 55000, 70000, "New ConTex (6,500 TEU class)"),
+                         (99999, 70000, 100000, "estimate: bigger than the index covers")]
+# Cargo waiting costs money (capital tied up). Sea-Intelligence benchmark: $40,000 of cargo per TEU,
+# at a 5 % or 10 % annual rate. Per TEU per day: 40,000 x rate / 365.
+CARGO_VALUE_PER_TEU_USD = 40000
+CARGO_CAPITAL_RATE = (0.05, 0.10)

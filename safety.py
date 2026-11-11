@@ -107,6 +107,7 @@ def clean_saved_ship(ship) -> dict | None:
         "ship_type": to_int(ship.get("ship_type"), 0, 99),
         "imo": to_int(ship.get("imo"), 1, 9_999_999),
         "draught_m": to_float(ship.get("draught_m"), 0, 25.5),
+        "length_m": to_int(ship.get("length_m"), 20, 460),
         "eta": clean_eta(ship.get("eta")),
     })
     return clean

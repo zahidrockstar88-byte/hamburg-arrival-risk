@@ -91,6 +91,15 @@ def _meta_value(meta: dict, *names):
     return None
 
 
+def _length_from_dimension(dimension) -> int | None:
+    """Ship length in metres from the AIS Dimension field (A + B), or None if missing or impossible."""
+    dimension = _as_dict(dimension)
+    bow, stern = to_int(dimension.get("A"), 0, 511), to_int(dimension.get("B"), 0, 511)
+    if bow is None or stern is None:
+        return None
+    return to_int(bow + stern, 20, 460)          # the biggest ships are ~400 m
+
+
 def _as_dict(value) -> dict:
     """Return the value if it is a dictionary, otherwise an empty one (so .get() never crashes)."""
     return value if isinstance(value, dict) else {}
@@ -150,6 +159,8 @@ def handle_message(ships: dict, msg: dict) -> None:
             "imo": to_int(body.get("ImoNumber"), 1, 9_999_999),  # 7-digit ship ID
             "callsign": clean_ais_text(body.get("CallSign"), "callsign"),
             "draught_m": to_float(body.get("MaximumStaticDraught"), 0, 25.5),
+            # Length = distance from the GPS antenna to the bow (A) + to the stern (B). Used to estimate size.
+            "length_m": _length_from_dimension(body.get("Dimension")),
             "name": clean_ais_text(body.get("Name"), "name") or ship.get("name", ""),
             "last_static_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         })

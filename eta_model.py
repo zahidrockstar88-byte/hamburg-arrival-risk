@@ -31,36 +31,18 @@ It writes model/eta_model.json, which app.py reads.
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 
 import config
-from risk import ARRIVAL_FLAGS, NO_ETA_TO_JUDGE, assess_ship, parse_time
-from safety import clean_saved_ship
+from risk import ARRIVAL_FLAGS, NO_ETA_TO_JUDGE, parse_time
+from history import collect_sightings, load_snapshots_from_git   # noqa: F401 (shared with history.py)
 
 MODEL_FILE = config.PROJECT_DIR / "model" / "eta_model.json"
 MIN_SHIPS_TO_TRAIN = 10        # below this, we don't train at all
 MAX_HOURS = 24 * 14            # ignore examples longer than two weeks (probably broken data)
-
-
-# ---------------------------------------------------------------------------
-# 1. Snapshots: every saved version of data/ships.json in git
-# ---------------------------------------------------------------------------
-def load_snapshots_from_git(repo: Path = config.PROJECT_DIR) -> list[dict]:
-    """Return every saved version of data/ships.json, oldest first."""
-    def git(*args) -> str:
-        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout
-
-    snapshots = []
-    for sha in reversed(git("log", "--format=%H", "--", "data/ships.json").split()):
-        try:
-            snapshots.append(json.loads(git("show", f"{sha}:data/ships.json")))
-        except (subprocess.CalledProcessError, ValueError):
-            continue                       # a broken or missing version: skip it
-    return snapshots
 
 
 # ---------------------------------------------------------------------------
@@ -72,15 +54,8 @@ def build_examples(snapshots: list[dict]) -> list[dict]:
     see the ship moored in Hamburg (🔵 Arrived, see GLOSSARY.md: arrival = berthing),
     so it is only accurate to about the gap between snapshots (~3 hours).
     """
-    sightings = {}                         # mmsi -> {position time: (row, ship)}
-    for snapshot in snapshots:
-        for raw in (snapshot.get("ships") or {}).values():
-            ship = clean_saved_ship(raw)
-            seen = parse_time((ship or {}).get("last_position_utc"))
-            if not ship or not seen or not ship["mmsi"]:
-                continue
-            row = assess_ship(ship, now=seen)
-            sightings.setdefault(ship["mmsi"], {})[seen] = row
+    sightings = {mmsi: {seen: row for seen, (row, _ship) in by_time.items()}
+                 for mmsi, by_time in collect_sightings(snapshots).items()}
 
     examples = []
     for mmsi, by_time in sightings.items():

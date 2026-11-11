@@ -60,6 +60,32 @@ A Hamburg-bound ship moored at a berth somewhere else, working cargo before it s
 a delay signal.
 _Avoid_: Stopped, waiting, delayed
 
+**Promised ETA**:
+The reported ETA a ship gave the first time we saw it under way. The carrier scorecard checks arrivals
+against it.
+_Avoid_: Scheduled arrival (the published schedule is something else)
+
+**Schedule reliability**:
+The share of judged arrivals that berthed within a day of their promised ETA, per shipping line.
+_Avoid_: On-time performance (when it means something measured differently)
+
+**Berthing window**:
+The time span in which a ship must have berthed: after we last saw it under way, and no later than the first
+time we saw it moored.
+_Avoid_: Arrival time (when only the window is known)
+
+## After the berth
+
+**Container availability**:
+The time from which a container unloaded in Hamburg can be collected by truck: after unloading and yard
+release.
+_Avoid_: Discharge time (that's when it leaves the ship)
+
+**Delay cost**:
+The estimated cost of a ship berthing later than promised: the ship's time plus the capital tied up in its
+Hamburg cargo.
+_Avoid_: Demurrage (a separate fee that starts only after unloading)
+
 ## Risk
 
 **Risk flag**:

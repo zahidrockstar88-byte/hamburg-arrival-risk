@@ -409,6 +409,8 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
         "calc_hours": round(hours_to_go, 2),      # used by the experimental ML estimate (eta_model.py)
         "stopped": bool(stopped),
         "calc_eta_utc": calc_eta,
+        "length_m": ship.get("length_m"),          # ship size, for unloading and delay-cost estimates
+        "draught_m": ship.get("draught_m"),
         "Where": route["area"],
         "Distance (nm)": round(total_nm),
         "Speed (kn)": round(sog, 1) if sog is not None else None,

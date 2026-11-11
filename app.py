@@ -23,9 +23,11 @@ import streamlit as st
 
 import config
 from eta_model import load_model, ml_eta_for
+from history import OTHER_LINE, judge, load_arrivals, scorecard
 from news import MAX_AGE_DAYS, latest_headlines
 from risk import (ARRIVAL_FLAGS, CHART_FLAGS, assess_all, is_bound_for_hamburg, is_cargo_type, nice_time,
                   parse_time)
+from operations import after_berth, delay_cost, estimate_teu, money
 from safety import clean_saved_ship, md, safe_link
 
 st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon=":material/anchor:", layout="wide")
@@ -208,6 +210,10 @@ with st.sidebar:
     containers_only = st.checkbox("Container ships only (likely)", value=False,
                                   help="A guess from the ship's name (e.g. MSC, MAERSK) or its berth at a "
                                        "container terminal. AIS does not say what a ship carries.")
+    st.subheader("After the berth")
+    warehouse_km = st.slider("Distance from the terminal to your warehouse (km)", 5, 150,
+                             config.DEFAULT_WAREHOUSE_KM, step=5,
+                             help="Used to estimate when containers from a ship could reach your warehouse by truck.")
     st.divider()
     st.caption("The calculated ETA is the distance along the sea route divided by the ship's speed. "
                "The flags are warnings, not forecasts.")
@@ -230,6 +236,11 @@ if containers_only:
 model = load_model()
 for row in rows:
     row["ML ETA (experimental)"] = nice_time(ml_eta_for(row, model))      # "—" when there is none
+    # Size and delay cost are only estimated for likely container ships: the assumptions are about containers.
+    teu, size_basis = estimate_teu(row["length_m"], row["draught_m"]) if row["container_likely"] else (None, "")
+    row["teu"], row["Size (TEU, est.)"], row["size_basis"] = teu, (f"~{teu:,}" if teu else "—"), size_basis
+    late_by = row["Difference (h)"] if row["Flag"] == "🔴" else None
+    row["cost"] = delay_cost(teu, late_by) if teu and late_by else None
 df = pd.DataFrame(rows)
 
 # ---------------------------------------------------------------------------
@@ -266,7 +277,8 @@ for headline in top_news:
     st.markdown(f"{headline_markdown(headline)} "
                 f"({md(headline['source'])}, {md(news_date(headline['published']))})")
 
-tab_ships, tab_news, tab_method = st.tabs(["Ships", "News and disruptions", "How it works"])
+tab_ships, tab_carriers, tab_news, tab_method = st.tabs(
+    ["Ships", "Carriers", "News and disruptions", "How it works"])
 
 # ---------------------------------------------------------------------------
 # Ships: map, table, one-ship detail
@@ -323,6 +335,32 @@ with tab_ships:
     )
     st.caption(md(ml_accuracy(model)))
 
+    st.subheader("What the delays cost")
+    costed = df[df["cost"].notna()] if "cost" in df else df.iloc[0:0]
+    late_containers = int(((df["Flag"] == "🔴") & df["container_likely"]).sum())
+    if costed.empty:
+        st.markdown(md("No likely container ship is running late right now, so there is no delay cost to "
+                       "estimate.") if late_containers == 0 else
+                    md("The late container ships have no known size yet, so their cost can't be estimated."))
+    else:
+        total_low = sum(c["total"][0] for c in costed["cost"])
+        total_high = sum(c["total"][1] for c in costed["cost"])
+        ships_word = "ship we can size is" if len(costed) == 1 else "ships we can size are"
+        st.markdown(md(f"The {len(costed)} late container {ships_word} costing roughly "
+                       f"{money(total_low, total_high)} in ship time and tied-up cargo."))
+        cost_table = pd.DataFrame([{
+            "Ship": r["Ship"], "Shipping line": r["Shipping line"], "Late by (h)": r["Difference (h)"],
+            "Size (TEU, est.)": r["Size (TEU, est.)"], "Ship time": money(*r["cost"]["ship"]),
+            "Tied-up cargo": money(*r["cost"]["cargo"]), "Total": money(*r["cost"]["total"]),
+        } for _, r in costed.iterrows()])
+        st.dataframe(cost_table, hide_index=True, width="stretch",
+                     column_config={"Late by (h)": st.column_config.NumberColumn(format="%d")})
+    st.caption("Ship time = the daily charter rate for a ship of that size (New ConTex index, Aug-Oct 2026; "
+               "estimated above 6,500 TEU) times the days late. Tied-up cargo = the value of the containers "
+               "unloaded in Hamburg ($40,000 per TEU, Sea-Intelligence benchmark) at 5-10 % a year. Fuel and "
+               "demurrage are left out: a waiting ship burns little fuel, and demurrage starts only after "
+               "unloading. Estimates, in US dollars.")
+
     st.subheader("One ship in detail")
     # Ship names can repeat, so we pick by row number and show the MMSI to tell them apart.
     choice = st.selectbox("Choose a ship", range(len(df)),
@@ -346,9 +384,86 @@ with tab_ships:
                         f"**Calculated ETA** {md(detail['Calculated ETA'])}  \n"
                         f"**ML ETA** (experimental) {md(detail['ML ETA (experimental)'])}")
             st.caption(md(ml_accuracy(model)))
+        st.markdown("**After the berth**")
+        if not detail["container_likely"]:
+            st.caption("Only estimated for likely container ships.")
+        elif detail["Flag"] in ("🔵", "⚫"):
+            st.caption("Already moored in Hamburg, or still in another port, so there is no berthing time to "
+                       "plan from.")
+        elif not detail["teu"]:
+            st.caption("The ship's length isn't known yet (it arrives with the next data collection), so unloading "
+                       "can't be estimated.")
+        else:
+            plan = after_berth(detail["calc_eta_utc"], detail["teu"], warehouse_km)
+
+            def window(step: str) -> str:
+                earliest, latest = plan[step]
+                return f"{nice_time(earliest)} to {nice_time(latest)}"
+
+            fast_h, slow_h = plan["unloading_hours"]
+            st.markdown(md(
+                f"About {detail['teu']:,} TEU (estimated from its {detail['size_basis']}). If it berths at the "
+                f"calculated ETA, {plan['cranes']} cranes unload its roughly {plan['moves'][0]:,} to "
+                f"{plan['moves'][1]:,} Hamburg containers in {fast_h:.0f} to {slow_h:.0f} hours."))
+            st.markdown(md(f"First containers ready for pickup: {window('first_ready')}.") + "  \n" +
+                        md(f"All unloaded containers ready: {window('all_ready')}.") + "  \n" +
+                        md(f"At a warehouse {warehouse_km} km away: first from {nice_time(plan['at_warehouse_first'][0])}, "
+                           f"all by {nice_time(plan['at_warehouse_all'][1])}."))
+            if detail["cost"] is not None:
+                cost = detail["cost"]
+                st.markdown(md(f"Running about {cost['days'] * 24:.0f} h late costs roughly "
+                               f"{money(*cost['total'])} ({money(*cost['ship'])} ship time, "
+                               f"{money(*cost['cargo'])} tied-up cargo)."))
+            st.caption("Estimates from assumptions explained under How it works. Customs is assumed to be cleared "
+                       "before arrival.")
         st.caption(f"The crew typed the destination as {md(detail['Destination typed'])}. "
                    f"Speed used: {md(detail['Speed used'])}. Last position {md(detail['Position age (h)'])} h ago. "
                    f"MMSI {md(detail['MMSI'])}.")
+
+# ---------------------------------------------------------------------------
+# Carriers: which shipping lines keep their promises (a procurement view)
+# ---------------------------------------------------------------------------
+with tab_carriers:
+    arrivals, arrivals_updated = load_arrivals()
+    if not arrivals:
+        st.subheader("No arrivals recorded yet")
+        st.markdown("The scorecard fills up as the collector sees ships at sea and later moored in Hamburg.")
+    else:
+        rows_by_line = scorecard(arrivals)
+        everyone = rows_by_line[0]
+        judged = everyone["On time"] + everyone["Late"] + everyone["Early"]
+        st.subheader(md(f"{everyone['On time']} of {judged} ships berthed within a day of the ETA they "
+                        f"first reported to us"))
+        st.markdown(md(
+            f"Built from {len(arrivals)} real arrivals: ships we saw at sea and later saw moored in Hamburg. "
+            f"A ship counts as on time if it berthed within {config.ON_TIME_TOLERANCE_HOURS} hours of its "
+            f"promise, either way. A buyer of sea freight would use this to choose and negotiate with carriers."))
+        score_table = pd.DataFrame([{
+            **{k: v for k, v in row.items() if k != "Reliability"},
+            "Reliability": (f"{row['Reliability']:.0%}" if row["Reliability"] is not None
+                            else f"needs {config.MIN_ARRIVALS_FOR_SCORE}+ arrivals"),
+        } for row in rows_by_line])
+        st.dataframe(score_table, hide_index=True, width="stretch", column_config={
+            "Average delay (h)": st.column_config.NumberColumn(
+                format="%+.1f", help="Middle of the berthing window minus the promised ETA. Negative = early."),
+            "Unclear": st.column_config.NumberColumn(
+                help="We look every ~3 hours, so we only know a window for each berthing. If that window "
+                     "crosses the on-time limit, or no ETA was reported, the arrival is not judged."),
+        })
+        st.caption(md(
+            "Why this looks better than industry reliability figures: the promise here is the ETA a ship "
+            "reported the first time we saw it, usually a day or two before arrival in European waters. Industry "
+            "figures (for example Sea-Intelligence) compare against the schedule published weeks earlier, so they "
+            "are much lower. Compare carriers with each other here, not with those reports. "
+            f"Ships whose name doesn't reveal the line are grouped as {OTHER_LINE}."
+            + (f" Updated {arrivals_updated:%d %b %Y, %H:%M} UTC." if arrivals_updated else "")))
+        with st.expander("Every recorded arrival"):
+            st.dataframe(pd.DataFrame([{
+                "Ship": a["ship"], "Shipping line": a["line"], "Verdict": judge(a),
+                "Promised ETA": nice_time(parse_time(a["promised_eta"])),
+                "Berthed between": f"{nice_time(parse_time(a['arrived_after']))} and "
+                                   f"{nice_time(parse_time(a['arrived_by']))}",
+            } for a in reversed(arrivals)]), hide_index=True, width="stretch")
 
 # ---------------------------------------------------------------------------
 # News and disruptions, plus the hand-written chokepoint notes
@@ -413,7 +528,24 @@ with tab_method:
    A headline is kept only if it names a place on the way to Hamburg **and** a disruption (storm, strike,
    closure, congestion, accident, attack), from the last 7 days. Plain keyword matching, no AI, so nothing is
    invented.
+8. **Carriers** (procurement view): from the saved history we rebuild every ship we saw at sea and later saw
+   moored in Hamburg, and check it against the ETA it first reported. We only look every ~3 hours, so each
+   berthing is a time window; a ship is judged on time or late only when the whole window agrees.
+9. **After the berth**: ship size (TEU) from its length (never from its draught, which changes with the load); the
+   share unloaded in Hamburg, the number of cranes and their speed give an unloading time; then yard release
+   and the truck trip to your warehouse. Every step is a range from fastest to slowest.
+10. **Cost of delay**: the ship's time (charter rate per day) plus the capital tied up in the delayed cargo.
 """)
+        st.subheader("Assumptions behind the estimates")
+        share_low, share_high = config.UNLOAD_SHARE_RANGE
+        rate_low, rate_high = config.CARGO_CAPITAL_RATE
+        st.markdown(md(f"""
+- Unloaded in Hamburg: {share_low:.0%} to {share_high:.0%} of the ship's capacity (assumption), {config.TEU_PER_MOVE} TEU per crane move.
+- Crane speed: {config.CRANE_MOVES_PER_HOUR[0]} to {config.CRANE_MOVES_PER_HOUR[1]} moves per crane per hour (top terminals reach about 40; no HHLA figure is published), at most about 3,500 moves a day for one ship (Dynamar).
+- Ready for pickup {config.READY_FOR_PICKUP_AFTER_UNLOAD_H[0]} to {config.READY_FOR_PICKUP_AFTER_UNLOAD_H[1]} h after unloading; trucks at {config.TRUCK_SPEED_KMH[0]} to {config.TRUCK_SPEED_KMH[1]} km/h plus {config.TERMINAL_GATE_H[0]} to {config.TERMINAL_GATE_H[1]} h at the gate (assumptions).
+- Ship time: New ConTex charter index, Aug to Oct 2026, from about $30,000 a day for small feeders to about $60,000 for 4,000 to 5,000 TEU; bigger ships are estimated at $70,000 to $100,000 a day because the index stops at 6,500 TEU.
+- Cargo: ${config.CARGO_VALUE_PER_TEU_USD:,} per TEU (Sea-Intelligence benchmark) at {rate_low:.0%} to {rate_high:.0%} a year.
+"""))
         st.subheader("Experimental ML estimate")
         if model:
             a, b, c = model["coefficients"]
@@ -454,6 +586,11 @@ with tab_method:
 - The **ML ETA is experimental** and trained on very little data. It is shown for learning, not for planning.
 - News matching is by keyword, so it can miss stories or include loosely related ones. Headlines belong to
   the news sites; we only link to them.
+- **Carrier scores** need many arrivals. Most lines have only a few so far, so their percentage is hidden until
+  there are enough. The "promise" is the crew's ETA when we first saw the ship, not the published schedule.
+- **Unloading times and costs are estimates** built from published averages and stated assumptions. Real
+  unloading depends on the terminal, the stowage plan and the weather; real costs depend on contracts we
+  can't see.
 """)
 
 # ---------------------------------------------------------------------------

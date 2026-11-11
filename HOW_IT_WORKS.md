@@ -134,6 +134,19 @@ AIS range, saved data is checked again whenever it's loaded, and the dashboard e
 so it can't turn into a link. There are tests for both.
 The API key is never in the code, and the GitHub Action is pinned to exact versions."
 
+**"How does this cover procurement, warehousing and costs?"**
+"Three additions. A carrier scorecard: from the saved history I rebuild which ships really berthed and check
+each one against the ETA it promised, with a 24-hour tolerance; a buyer uses that to pick and negotiate with
+shipping lines. After the berth: from the ship's length I estimate its size, how long unloading takes with
+typical crane rates, and when containers could reach a warehouse by truck. And the cost of a delay: the ship's
+charter rate from the New ConTex index plus the capital tied up in the cargo, using Sea-Intelligence's
+$40,000-per-TEU benchmark. Everything is a range, and every assumption is written down in config.py."
+
+**"How accurate is the carrier score?"**
+"We only look every 3 hours, so I never know the exact berthing time, only a window. I only call a ship on
+time or late when the whole window agrees; otherwise it's 'unclear'. And a line needs at least three judged
+arrivals before it gets a percentage."
+
 **"Who would use this?"**
 "A forwarder or importer planning trucks and warehouse slots, or a terminal planning berths.
 Anyone who needs an early warning that an ETA is unrealistic."

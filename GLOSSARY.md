@@ -61,7 +61,7 @@ a delay signal.
 _Avoid_: Stopped, waiting, delayed
 
 **Promised ETA**:
-The reported ETA a ship gave the first time we saw it under way. The carrier scorecard checks arrivals
+The reported ETA a ship gave the first time we saw it under way. The shipping-line scorecard checks arrivals
 against it.
 _Avoid_: Scheduled arrival (the published schedule is something else)
 

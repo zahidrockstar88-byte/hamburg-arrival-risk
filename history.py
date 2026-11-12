@@ -10,7 +10,7 @@ We know a WINDOW: after the last time we saw the ship still under way, and no la
 first time we saw it moored. A judgement like "late" is only made when the whole window agrees.
 
 Used for:
-  - the carrier reliability scorecard (procurement: which shipping line keeps its promises?)
+  - the shipping-line scorecard (procurement: which shipping line keeps its promises?)
   - the experimental ML ETA (eta_model.py)
 
 Run it inside the project folder (it reads the git history):
@@ -30,7 +30,7 @@ from risk import ARRIVAL_FLAGS, ARRIVED, assess_ship, is_cargo_type, parse_ais_e
 from safety import clean_ais_text, clean_saved_ship, to_float
 
 ARRIVALS_FILE = config.DATA_DIR / "arrivals.json"
-OTHER_LINE = "Line unknown"          # ships whose name doesn't reveal the shipping line
+UNKNOWN_LINE = "Line unknown"          # ships whose name doesn't reveal the shipping line
 
 
 # ---------------------------------------------------------------------------
@@ -88,14 +88,14 @@ def build_arrivals(snapshots: list[dict]) -> list[dict]:
         first_seen = under_way[0]
         first_ship = by_time[first_seen][1]
         moored_ship = by_time[arrived_by][1]
-        if is_cargo_type(moored_ship.get("ship_type")) is False:
-            continue                       # tugs, ferries, tankers...: not what a shipper books (unknown type kept)
+        if is_cargo_type(moored_ship.get("ship_type")) is not True:
+            continue                       # only ships that report a cargo type: no tugs, ferries or unknowns
         line = shipping_line(moored_ship.get("name") or first_ship.get("name"))
         promised = parse_ais_eta(first_ship.get("eta"), first_seen)
         arrivals.append({
             "mmsi": mmsi,
             "ship": moored_ship.get("name") or first_ship.get("name") or f"MMSI {mmsi}",
-            "line": line[0] if line else OTHER_LINE,
+            "line": line[0] if line else UNKNOWN_LINE,
             "first_seen": first_seen.isoformat(),
             "promised_eta": promised.isoformat() if promised else None,
             "arrived_after": max(earlier).isoformat(),
@@ -177,7 +177,7 @@ def scorecard(arrivals: list[dict]) -> list[dict]:
             "Schedule reliability": (on_time / judged) if judged >= config.MIN_ARRIVALS_FOR_SCORE else None,
             "Average delay (h)": round(sum(delays) / len(delays), 1) if delays else None,
         })
-    first, rest = rows[0], sorted(rows[1:], key=lambda r: (r["Shipping line"] == OTHER_LINE, -r["Arrivals"]))
+    first, rest = rows[0], sorted(rows[1:], key=lambda r: (r["Shipping line"] == UNKNOWN_LINE, -r["Arrivals"]))
     return [first, *rest]
 
 
@@ -194,9 +194,10 @@ def load_arrivals(path: Path = ARRIVALS_FILE) -> tuple[list[dict], datetime | No
             saved = json.load(f)
     except (OSError, ValueError):
         return [], None
-    records = saved.get("arrivals") if isinstance(saved, dict) else None
+    if not isinstance(saved, dict) or not isinstance(saved.get("arrivals"), list):
+        return [], None
     clean = []
-    for record in records if isinstance(records, list) else []:
+    for record in saved["arrivals"]:
         if not isinstance(record, dict):
             continue
         times = {}
@@ -205,15 +206,17 @@ def load_arrivals(path: Path = ARRIVALS_FILE) -> tuple[list[dict], datetime | No
             times[key] = parse_time(value) if isinstance(value, str) else None      # text that isn't a time -> None
         if not (times["arrived_after"] and times["arrived_by"] and times["arrived_after"] <= times["arrived_by"]):
             continue
-        line = record.get("line") if isinstance(record.get("line"), str) else OTHER_LINE
-        clean.append({
+        line = record.get("line") if isinstance(record.get("line"), str) else UNKNOWN_LINE
+        arrival = {
             "mmsi": str(record.get("mmsi", ""))[:9],
             "ship": clean_ais_text(record.get("ship"), "name") or "Unknown ship",
             "line": line[:40],
-            **{key: (value.isoformat() if value else None) for key, value in times.items()},
-        })
-    updated = parse_time(saved.get("updated_utc")) if isinstance(saved, dict) and isinstance(
-        saved.get("updated_utc"), str) else None
+        }
+        for key, value in times.items():
+            arrival[key] = value.isoformat() if value else None
+        clean.append(arrival)
+    updated_text = saved.get("updated_utc")
+    updated = parse_time(updated_text) if isinstance(updated_text, str) else None
     return clean, updated
 
 

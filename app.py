@@ -24,21 +24,23 @@ import streamlit as st
 # Streamlit re-runs app.py after every upload but can keep OLD copies of our helper files in memory, which once
 # broke the live site ("ImportError" for a name that only exists in the new risk.py). So reload our own files
 # first, in the order they depend on each other. Outside libraries (streamlit, pandas...) are not touched.
-import importlib  # noqa: E402
-import sys  # noqa: E402
+import importlib
+import sys
 
 for _module in ("config", "safety", "risk", "news", "history", "operations", "eta_model"):
     if _module in sys.modules:
         importlib.reload(sys.modules[_module])
 
+# These imports come after the reload loop on purpose, so the "imports at the top" rule (E402) is switched off here.
 import config  # noqa: E402
-from eta_model import load_model, ml_eta_for
-from history import OTHER_LINE, judge, load_arrivals, scorecard
-from news import MAX_AGE_DAYS, latest_headlines
-from risk import (ARRIVAL_FLAGS, ARRIVED, CHART_FLAGS, IN_ANOTHER_PORT, LIKELY_LATE, assess_all, is_bound_for_hamburg, is_cargo_type, nice_time,
+from eta_model import load_model, ml_eta_for  # noqa: E402
+from history import UNKNOWN_LINE, judge, load_arrivals, scorecard  # noqa: E402
+from news import MAX_AGE_DAYS, latest_headlines  # noqa: E402
+from risk import (ARRIVAL_FLAGS, ARRIVED, ARRIVING, CHART_FLAGS, CHECK, IN_ANOTHER_PORT, LIKELY_LATE,  # noqa: E402
+                  ON_TRACK, assess_all, is_bound_for_hamburg, is_cargo_type, nice_time,
                   parse_time)
-from operations import after_berth, delay_cost, estimate_teu, money
-from safety import clean_saved_ship, md, safe_link
+from operations import after_berth, delay_cost, estimate_teu, money_range, total_cost  # noqa: E402
+from safety import clean_saved_ship, md, safe_link  # noqa: E402
 
 st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon=":material/anchor:", layout="wide")
 
@@ -271,8 +273,8 @@ def count(flag: str) -> int:
     return int((df["Flag"] == flag).sum())
 
 st.title(md(headline_sentence(count(LIKELY_LATE), len(df))))
-st.markdown(md(f"{count('🟡')} need a closer look, {count('🟢')} are on track, {count('⚫')} are still in another "
-            f"port and {count('⚪') + count('🔵')} have reached or are reaching Hamburg. "
+st.markdown(md(f"{count(CHECK)} need a closer look, {count(ON_TRACK)} are on track, {count(IN_ANOTHER_PORT)} are "
+            f"still in another port and {count(ARRIVING) + count(ARRIVED)} have reached or are reaching Hamburg. "
             f"{int(df['container_likely'].sum())} of the {len(df)} are likely container ships."))
 st.caption(md(f"Ship positions collected {updated:%d %b %Y at %H:%M} UTC." if updated else "Ship positions from AIS."))
 
@@ -350,23 +352,26 @@ with tab_ships:
     )
     st.caption(md(ml_accuracy(model)))
 
-    st.subheader("What the delays cost")
+    st.subheader("Delay cost of the late ships")
     costed = df[df["cost"].notna()] if "cost" in df else df.iloc[0:0]
     late_containers = int(((df["Flag"] == LIKELY_LATE) & df["container_likely"]).sum())
-    if costed.empty:
-        st.markdown(md("No likely container ship is running late right now, so there is no delay cost to "
-                       "estimate.") if late_containers == 0 else
-                    md("The late container ships have no known size yet, so their cost can't be estimated."))
-    else:
-        total_low = sum(c["total"][0] for c in costed["cost"])
-        total_high = sum(c["total"][1] for c in costed["cost"])
+    unsized = df[(df["Flag"] == LIKELY_LATE) & df["container_likely"] & df["cost"].isna()]["Ship"].tolist()
+    if late_containers == 0:
+        st.markdown("No likely container ship is running late right now, so there is no delay cost to estimate.")
+    elif not costed.empty:
+        total_low, total_high = total_cost(list(costed["cost"]))
         ships_word = "ship we can size is" if len(costed) == 1 else "ships we can size are"
         st.markdown(md(f"The {len(costed)} late container {ships_word} costing roughly "
-                       f"{money(total_low, total_high)} in ship time and tied-up cargo."))
+                       f"{money_range(total_low, total_high)} in ship time and tied-up cargo."))
+    if unsized:
+        its, their = ("its", "its") if len(unsized) == 1 else ("their", "their")
+        st.markdown(md(f"No cost yet for {', '.join(unsized)}: {its} length hasn't been reported, so {their} size "
+                       "(and so the charter rate) is unknown."))
+    if not costed.empty:
         cost_table = pd.DataFrame([{
             "Ship": r["Ship"], "Shipping line": r["Shipping line"], "Late by (h)": r["Difference (h)"],
-            "Size (TEU, est.)": r["Size (TEU, est.)"], "Ship time": money(*r["cost"]["ship"]),
-            "Tied-up cargo": money(*r["cost"]["cargo"]), "Total": money(*r["cost"]["total"]),
+            "Size (TEU, est.)": r["Size (TEU, est.)"], "Ship time": money_range(*r["cost"]["ship"]),
+            "Tied-up cargo": money_range(*r["cost"]["cargo"]), "Total": money_range(*r["cost"]["total"]),
             "Ship rate from": r["cost"]["rate_basis"],
         } for _, r in costed.iterrows()])
         st.dataframe(cost_table, hide_index=True, width="stretch",
@@ -416,9 +421,11 @@ with tab_ships:
         else:
             plan = after_berth(detail["calc_eta_utc"], detail_teu, warehouse_km)
 
-            def window(step: str) -> str:
-                earliest, latest = plan[step]
+            def between(earliest, latest) -> str:
                 return f"{nice_time(earliest)} to {nice_time(latest)}"
+
+            def window(step: str) -> str:
+                return between(*plan[step])
 
             fast_h, slow_h = plan["unloading_hours"]
             moves_low, moves_high = plan["moves"]
@@ -426,16 +433,16 @@ with tab_ships:
                 f"About {detail_teu:,} TEU (estimated from its {detail['size_basis']}). If it berths at the "
                 f"calculated ETA, about {plan['cranes']:.0f} cranes on average unload its roughly {moves_low:,} to "
                 f"{moves_high:,} Hamburg containers in {max(fast_h, 1):.0f} to {max(slow_h, 1):.0f} hours."))
-            st.markdown(md(f"First containers ready for pickup: {window('first_ready')}.") + "  \n" +
-                        md(f"All unloaded containers ready: {window('all_ready')}.") + "  \n" +
+            st.markdown(md(f"First containers available for pickup: {window('first_ready')}.") + "  \n" +
+                        md(f"All unloaded containers available: {window('all_ready')}.") + "  \n" +
                         md(f"By rail: on a train from {window('on_a_train')}.") + "  \n" +
-                        md(f"By truck to a warehouse {warehouse_km} km away: first from "
-                           f"{nice_time(plan['at_warehouse_first'][0])}, all by {nice_time(plan['at_warehouse_all'][1])}."))
+                        md(f"By truck to a warehouse {warehouse_km} km away: from "
+                           f"{between(plan['at_warehouse_first'][0], plan['at_warehouse_all'][1])}."))
             if isinstance(detail["cost"], dict):
                 cost = detail["cost"]
                 st.markdown(md(f"Running about {cost['days'] * 24:.0f} h late costs roughly "
-                               f"{money(*cost['total'])} ({money(*cost['ship'])} ship time, "
-                               f"{money(*cost['cargo'])} tied-up cargo). Ship rate from: {cost['rate_basis']}."))
+                               f"{money_range(*cost['total'])} ({money_range(*cost['ship'])} ship time, "
+                               f"{money_range(*cost['cargo'])} tied-up cargo). Ship rate from: {cost['rate_basis']}."))
             st.caption("Estimates from the assumptions under How it works, with customs cleared before arrival. "
                        "If containers stay at the terminal beyond the free days, demurrage starts; if empty "
                        "containers come back late, detention starts. Both depend on your contract, not on this "
@@ -454,20 +461,20 @@ with tab_lines:
         st.markdown("The scorecard fills up as the collector sees ships at sea and later moored in Hamburg.")
     else:
         score_rows = scorecard(arrivals)            # first row: all ships together, then one row per line
-        everyone = score_rows[0]
-        known_lines = sum(1 for a in arrivals if a["line"] != OTHER_LINE)
-        st.subheader(md(f"{everyone['On time']} of {everyone['Judged']} cargo ships berthed within a day of the "
+        all_ships = score_rows[0]
+        known_lines = sum(1 for a in arrivals if a["line"] != UNKNOWN_LINE)
+        st.subheader(md(f"{all_ships['On time']} of {all_ships['Judged']} cargo ships berthed within a day of the "
                         f"ETA they first reported to us"))
         st.markdown(md(
             f"Built from {len(arrivals)} real arrivals of cargo ships we saw at sea and later saw moored in "
             f"Hamburg. {known_lines} of them have a known shipping line so far; the rest are grouped as "
-            f"{OTHER_LINE}. A ship counts as on time if it berthed within {config.ON_TIME_TOLERANCE_HOURS} hours "
+            f"{UNKNOWN_LINE}. A ship counts as on time if it berthed within {config.ON_TIME_TOLERANCE_HOURS} hours "
             f"of its promise, either way. A buyer of sea freight would use this to choose shipping lines and "
             f"negotiate with them."))
-        needs = f"needs {config.MIN_ARRIVALS_FOR_SCORE}+ judged arrivals"
-        for row in score_rows:          # turn the share into text before the table is built (empty -> "needs ...")
+        too_few_label = f"needs {config.MIN_ARRIVALS_FOR_SCORE}+ judged arrivals"
+        for row in score_rows:          # turn the share into text before the table is built (empty -> too_few_label)
             share = row["Schedule reliability"]
-            row["Schedule reliability"] = f"{share:.0%}" if share is not None else needs
+            row["Schedule reliability"] = f"{share:.0%}" if share is not None else too_few_label
         score_table = pd.DataFrame(score_rows)
         st.dataframe(score_table, hide_index=True, width="stretch", column_config={
             "Average delay (h)": st.column_config.NumberColumn(
@@ -482,7 +489,7 @@ with tab_lines:
             "reported the first time we saw it, usually a day or two before arrival in European waters. Industry "
             "figures (for example Sea-Intelligence) compare against the schedule published weeks earlier, so they "
             "are much lower. Compare shipping lines with each other here, not with those reports. "
-            f"Ships whose name doesn't reveal the line are grouped as {OTHER_LINE}."
+            f"Ships whose name doesn't reveal the line are grouped as {UNKNOWN_LINE}."
             + (f" Updated {arrivals_updated:%d %b %Y, %H:%M} UTC." if arrivals_updated else "")))
         with st.expander("Every recorded arrival"):
             st.dataframe(pd.DataFrame([{
@@ -567,11 +574,19 @@ with tab_method:
         share_low, share_high = config.UNLOAD_SHARE_RANGE
         rate_low, rate_high = config.CARGO_CAPITAL_RATE
         # Static wording with our own config numbers: no outside data, so no md() (it would escape the bullets).
+        smallest, biggest = config.TEU_BY_LENGTH_M[0], config.TEU_BY_LENGTH_M[-1]
+        fewest_cranes, most_cranes = config.CRANE_INTENSITY_BY_TEU[0], config.CRANE_INTENSITY_BY_TEU[-1]
+        slow_cap, fast_cap = config.MAX_MOVES_PER_SHIP_PER_DAY
+        sourced = ", ".join(f"{teu:,} TEU ${rate:,}" for teu, rate in config.SHIP_RATE_SOURCED)
+        estimated = ", ".join(f"{teu:,} TEU ${rate:,}" for teu, rate in config.SHIP_RATE_ESTIMATED)
+        narrow, wide = config.SHIP_RATE_SPREAD_BY_TEU
+        # Static wording with our own config numbers: no outside data, so no md() (it would escape the bullets).
         st.markdown(f"""
+- Ship size from length: a rule of thumb from typical container-ship classes, from {smallest[0]} m ≈ {smallest[1]:,} TEU to {biggest[0]} m ≈ {biggest[1]:,} TEU.
 - Unloaded in Hamburg: {share_low:.0%} to {share_high:.0%} of the ship's capacity (assumption), {config.TEU_PER_MOVE} TEU per crane move.
-- Cranes: on average 2 for a 1,000 TEU ship rising to 6 for 20,000 TEU, each moving {config.CRANE_MOVES_PER_HOUR[0]} to {config.CRANE_MOVES_PER_HOUR[1]} boxes an hour (top terminals reach about 40; no HHLA figure is published), at most about 3,500 moves a day for one ship (Dynamar).
-- Ready for pickup {config.READY_FOR_PICKUP_AFTER_UNLOAD_H[0]} to {config.READY_FOR_PICKUP_AFTER_UNLOAD_H[1]} h after unloading; a train within {config.RAIL_WAIT_FOR_TRAIN_H[0]} to {config.RAIL_WAIT_FOR_TRAIN_H[1]} h; trucks at {config.TRUCK_SPEED_KMH[0]} to {config.TRUCK_SPEED_KMH[1]} km/h plus {config.TERMINAL_GATE_H[0]} to {config.TERMINAL_GATE_H[1]} h at the gate (assumptions).
-- Ship time: a smooth line through the New ConTex charter index, Aug to Oct 2026 (1,700 TEU $33,877 a day, 2,500 TEU about $37,900, 2,700 TEU $40,052, 4,250 TEU about $58,800), shown as plus or minus 5 %. Above 4,250 TEU it is our estimate, plus or minus 20 %, and labelled as such.
+- Cranes: on average {fewest_cranes[1]} for a {fewest_cranes[0]:,} TEU ship rising to {most_cranes[1]} for {most_cranes[0]:,} TEU, each moving {config.CRANE_MOVES_PER_HOUR[0]} to {config.CRANE_MOVES_PER_HOUR[1]} boxes an hour (top terminals reach about 40; no HHLA figure is published). One ship gets at most {slow_cap:,} (slow case, assumption) to {fast_cap:,} (Dynamar) moves a day.
+- Unloading starts {config.START_UNLOADING_AFTER_BERTH_H[0]} to {config.START_UNLOADING_AFTER_BERTH_H[1]} h after berthing; containers are available for pickup {config.READY_FOR_PICKUP_AFTER_UNLOAD_H[0]} to {config.READY_FOR_PICKUP_AFTER_UNLOAD_H[1]} h after unloading; a train within {config.RAIL_WAIT_FOR_TRAIN_H[0]} to {config.RAIL_WAIT_FOR_TRAIN_H[1]} h; trucks at {config.TRUCK_SPEED_KMH[0]} to {config.TRUCK_SPEED_KMH[1]} km/h plus {config.TERMINAL_GATE_H[0]} to {config.TERMINAL_GATE_H[1]} h at the gate (assumptions).
+- Ship time, sourced (New ConTex charter index, Aug to Oct 2026): {sourced} a day. Estimated beyond the index: {estimated} a day. Shown as plus or minus {narrow[1]:.0%} up to {narrow[0]:,} TEU, widening smoothly to {wide[1]:.0%} at {wide[0]:,} TEU and above.
 - Cargo: ${config.CARGO_VALUE_PER_TEU_USD:,} per TEU (Sea-Intelligence benchmark) at {rate_low:.0%} to {rate_high:.0%} a year.
 """)
         st.subheader("Experimental ML estimate")

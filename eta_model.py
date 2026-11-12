@@ -54,8 +54,11 @@ def build_examples(snapshots: list[dict]) -> list[dict]:
     see the ship moored in Hamburg (🔵 Arrived, see GLOSSARY.md: arrival = berthing),
     so it is only accurate to about the gap between snapshots (~3 hours).
     """
-    sightings = {mmsi: {seen: row for seen, (row, _ship) in by_time.items()}
-                 for mmsi, by_time in collect_sightings(snapshots).items()}
+    sightings = {}                         # mmsi -> {time seen: dashboard row at that moment}
+    for mmsi, by_time in collect_sightings(snapshots).items():
+        sightings[mmsi] = {}
+        for seen, (row, _ship) in by_time.items():
+            sightings[mmsi][seen] = row
 
     examples = []
     for mmsi, by_time in sightings.items():

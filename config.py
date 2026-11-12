@@ -82,7 +82,7 @@ ARRIVED_WITHIN_NM = 15
 # cargo ships (type 70-79). So we make an educated guess in two ways:
 #
 # 1. The ship's name. Most big container ships are named after the shipping
-#    line (carrier) that runs them: "MSC SINDY", "MAERSK SEOUL", "EVER GREET".
+#    shipping line that runs them: "MSC SINDY", "MAERSK SEOUL", "EVER GREET".
 #    Format: (where the word must be, the word, the shipping line's name)
 #    "start" = first word(s) of the name, "end" = last word(s) of the name.
 SHIPPING_LINE_NAMES = [
@@ -119,12 +119,12 @@ CONTAINER_TERMINALS = {
 }
 
 # ---------------------------------------------------------------------------
-# Carrier reliability (procurement view)
+# Shipping-line schedule reliability (procurement view)
 # ---------------------------------------------------------------------------
 # A ship is "on time" if it berthed within this many hours of the ETA it first reported to us.
 # 24 h (one day either way) is the usual industry tolerance for schedule reliability.
 ON_TIME_TOLERANCE_HOURS = 24
-# Below this many arrivals a carrier's percentage is not shown: too few to mean anything.
+# Below this many JUDGED arrivals a shipping line's percentage is not shown: too few to mean anything.
 MIN_ARRIVALS_FOR_SCORE = 3
 
 # ---------------------------------------------------------------------------
@@ -148,9 +148,10 @@ CRANE_INTENSITY_BY_TEU = [(1000, 2), (3000, 3), (8000, 4), (14000, 5), (20000, 6
 # Moves per crane per hour. Top terminals reach ~40 (Port Technology berth productivity ranking);
 # we use a lower, more typical range because no HHLA figure is published.
 CRANE_MOVES_PER_HOUR = (25, 35)
-# Ceiling for one ship: about 3,500 moves a day is a realistic maximum for an ultra-large ship
-# in North Europe (Dynamar, via Seatrade Maritime).
-MAX_MOVES_PER_SHIP_PER_HOUR = 3500 / 24
+# Ceiling for one ship, moves per day (slow case, fast case). Fast: about 3,500 moves a day is a realistic
+# maximum for an ultra-large ship in North Europe (Dynamar, via Seatrade Maritime). Slow: 2,500 (assumption),
+# so slow cranes still make the biggest ships slower instead of both cases hitting the same ceiling.
+MAX_MOVES_PER_SHIP_PER_DAY = (2500, 3500)
 
 START_UNLOADING_AFTER_BERTH_H = (0.5, 1.5)   # mooring, lashing, gangway (assumption)
 READY_FOR_PICKUP_AFTER_UNLOAD_H = (2, 6)     # stacking in the yard and release (assumption; customs pre-cleared)
@@ -167,11 +168,12 @@ DEFAULT_WAREHOUSE_KM = 30                    # a typical warehouse in the Hambur
 # Sourced: New ConTex charter index, Aug-Oct 2026 (DynaLiners Sept 2026, Container News, VHBS):
 #   1,700 TEU $33,877; 2,500 TEU $37,227-38,665 (mid $37,946); 2,700 TEU $40,052; 4,250 TEU $58,050-59,511 (mid $58,781).
 SHIP_RATE_SOURCED = [(1700, 33877), (2500, 37946), (2700, 40052), (4250, 58781)]
-SHIP_RATE_SOURCED_SPREAD = 0.05     # shown as +-5 % around the line
+# How uncertain the rate is, by ship size: +-5 % where the index has data, widening smoothly to +-20 %
+# for the estimated sizes (no sudden jump where the sourced data ends).
+SHIP_RATE_SPREAD_BY_TEU = [(4250, 0.05), (8000, 0.20)]
 # ESTIMATE, not sourced: the index publishes nothing we could verify above 4,250 TEU. Bigger ships earn more
 # per day, but less per TEU; these points continue that trend and are labelled "estimate" on the page.
 SHIP_RATE_ESTIMATED = [(8000, 75000), (14000, 90000), (20000, 105000)]
-SHIP_RATE_ESTIMATED_SPREAD = 0.20   # much wider: +-20 %
 # Cargo waiting costs money (capital tied up). Sea-Intelligence benchmark: $40,000 of cargo per TEU,
 # at a 5 % or 10 % annual rate. Per TEU per day: 40,000 x rate / 365.
 CARGO_VALUE_PER_TEU_USD = 40000

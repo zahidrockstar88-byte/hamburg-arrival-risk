@@ -318,10 +318,11 @@ def container_guess(ship: dict) -> dict:
 #   🔴 Likely late   🟡 Check (Waiting, No ETA, Data too old)   🟢 On track
 #   ⚫ In another port (moored elsewhere, working cargo: normal)   ⚪ Arriving (final approach)   🔵 Arrived (moored in Hamburg)
 FLAG_ORDER = {"🔴": 0, "🟡": 1, "🟢": 2, "⚫": 3, "⚪": 4, "🔵": 5}
-LIKELY_LATE, ARRIVED, IN_ANOTHER_PORT = "🔴", "🔵", "⚫"
-ARRIVAL_FLAGS = ("⚪", ARRIVED)   # ships at or very close to Hamburg: nothing left to judge
-NO_ETA_TO_JUDGE = ARRIVAL_FLAGS + ("⚫",)   # ...plus ships still in another port (departure time unknown)
-CHART_FLAGS = ("🔴", "🟡", "🟢", "⚫")      # ships still to come, shown on the approach chart
+LIKELY_LATE, CHECK, ON_TRACK = "🔴", "🟡", "🟢"
+IN_ANOTHER_PORT, ARRIVING, ARRIVED = "⚫", "⚪", "🔵"
+ARRIVAL_FLAGS = (ARRIVING, ARRIVED)   # ships at or very close to Hamburg: nothing left to judge
+NO_ETA_TO_JUDGE = ARRIVAL_FLAGS + (IN_ANOTHER_PORT,)   # ...plus ships still in another port (departure unknown)
+CHART_FLAGS = (LIKELY_LATE, CHECK, ON_TRACK, IN_ANOTHER_PORT)   # ships still to come, shown on the approach chart
 
 
 def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None = None) -> dict:

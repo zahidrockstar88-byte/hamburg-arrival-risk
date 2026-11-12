@@ -46,11 +46,6 @@ def estimate_teu(length_m: float | None) -> tuple[int | None, str]:
 # ---------------------------------------------------------------------------
 # 2. After the berth
 # ---------------------------------------------------------------------------
-def cranes_for(teu: int) -> float:
-    """Average number of quay cranes working a ship of this size (can be 3.4: cranes join and leave)."""
-    return _interpolate(config.CRANE_INTENSITY_BY_TEU, teu)
-
-
 def hamburg_teu(teu: int) -> tuple[float, float]:
     """How many TEU of this ship are unloaded in Hamburg: (fewest, most), from the share in config.py."""
     share_low, share_high = config.UNLOAD_SHARE_RANGE
@@ -69,20 +64,22 @@ def unloading(teu: int) -> Unloading:
     """How long unloading the Hamburg containers takes, with the cranes and moves behind it."""
     teu_low, teu_high = hamburg_teu(teu)
     moves_low, moves_high = teu_low / config.TEU_PER_MOVE, teu_high / config.TEU_PER_MOVE
-    cranes = cranes_for(teu)
-    slow_rate, fast_rate = (min(cranes * rate, config.MAX_MOVES_PER_SHIP_PER_HOUR)
-                            for rate in config.CRANE_MOVES_PER_HOUR)
+    cranes = _interpolate(config.CRANE_INTENSITY_BY_TEU, teu)   # average cranes (can be 3.4: they join and leave)
+    slow_crane, fast_crane = config.CRANE_MOVES_PER_HOUR          # moves per crane per hour
+    slow_ceiling, fast_ceiling = (moves / 24 for moves in config.MAX_MOVES_PER_SHIP_PER_DAY)
+    slow_rate = min(cranes * slow_crane, slow_ceiling)            # moves per hour for the whole ship
+    fast_rate = min(cranes * fast_crane, fast_ceiling)
     return Unloading(moves_low / fast_rate, moves_high / slow_rate, cranes, round(moves_low), round(moves_high))
 
 
 def after_berth(berth_time: datetime, teu: int, warehouse_km: float) -> dict:
     """
     Timeline after berthing, each step as (earliest, latest):
-      unloading_starts, first_ready (first boxes released for pickup), all_unloaded,
-      all_ready, on_a_train (by rail), at_warehouse_first, at_warehouse_all (by truck).
+      unloading_starts, first_ready (first boxes available for pickup), all_ready,
+      on_a_train (by rail), at_warehouse_first, at_warehouse_all (by truck).
     """
-    work = unloading(teu)
-    fast_h, slow_h = work.fastest_h, work.slowest_h
+    unload = unloading(teu)
+    fast_h, slow_h = unload.fastest_h, unload.slowest_h
     start_lo, start_hi = config.START_UNLOADING_AFTER_BERTH_H
     ready_lo, ready_hi = config.READY_FOR_PICKUP_AFTER_UNLOAD_H
     speed_lo, speed_hi = config.TRUCK_SPEED_KMH
@@ -90,16 +87,17 @@ def after_berth(berth_time: datetime, teu: int, warehouse_km: float) -> dict:
     drive_lo = gate_lo + warehouse_km / speed_hi        # quick gate, free-flowing roads
     drive_hi = gate_hi + warehouse_km / speed_lo        # slow gate, port traffic
 
-    def at(hours: float) -> datetime:
+    def hours_after_berth(hours: float) -> datetime:
         return berth_time + timedelta(hours=hours)
 
+    at = hours_after_berth           # short name, so each step below fits on one readable line
+
     return {
-        "cranes": work.cranes,
-        "moves": (work.moves_low, work.moves_high),
+        "cranes": unload.cranes,
+        "moves": (unload.moves_low, unload.moves_high),
         "unloading_hours": (fast_h, slow_h),
         "unloading_starts": (at(start_lo), at(start_hi)),
         "first_ready": (at(start_lo + ready_lo), at(start_hi + ready_hi)),
-        "all_unloaded": (at(start_lo + fast_h), at(start_hi + slow_h)),
         "all_ready": (at(start_lo + fast_h + ready_lo), at(start_hi + slow_h + ready_hi)),
         "on_a_train": (at(start_lo + ready_lo + config.RAIL_WAIT_FOR_TRAIN_H[0]),
                        at(start_hi + slow_h + ready_hi + config.RAIL_WAIT_FOR_TRAIN_H[1])),
@@ -123,14 +121,12 @@ def ship_cost_per_day(teu: int) -> tuple[float, float, str]:
     """
     sourced_up_to = config.SHIP_RATE_SOURCED[-1][0]
     rate = _interpolate(config.SHIP_RATE_SOURCED + config.SHIP_RATE_ESTIMATED, teu)
-    if teu <= sourced_up_to:
-        spread, basis = config.SHIP_RATE_SOURCED_SPREAD, SOURCED_RATE
-    else:
-        spread, basis = config.SHIP_RATE_ESTIMATED_SPREAD, ESTIMATED_RATE
+    spread = _interpolate(config.SHIP_RATE_SPREAD_BY_TEU, teu)      # grows smoothly away from the sourced data
+    basis = SOURCED_RATE if teu <= sourced_up_to else ESTIMATED_RATE
     return rate * (1 - spread), rate * (1 + spread), basis
 
 
-def delay_cost(teu: int, delay_hours: float) -> dict | None:
+def delay_cost(teu: int, hours_late: float) -> dict | None:
     """
     What a delay costs, in US dollars, as (low, high) ranges:
       ship  - the ship's time: charter rate per day x days late
@@ -139,9 +135,9 @@ def delay_cost(teu: int, delay_hours: float) -> dict | None:
     demurrage only starts after unloading, so a late ship doesn't cause it.
     Returns None when the ship is not late.
     """
-    if delay_hours is None or delay_hours <= 0:
+    if hours_late is None or hours_late <= 0:
         return None
-    days = delay_hours / 24
+    days = hours_late / 24
     day_low, day_high, basis = ship_cost_per_day(teu)
     teu_low, teu_high = hamburg_teu(teu)
     rate_low, rate_high = config.CARGO_CAPITAL_RATE
@@ -157,7 +153,12 @@ def delay_cost(teu: int, delay_hours: float) -> dict | None:
     }
 
 
-def money(low: float, high: float) -> str:
+def total_cost(costs: list[dict]) -> tuple[float, float]:
+    """Add up several delay costs: (lowest total, highest total)."""
+    return sum(cost["total"][0] for cost in costs), sum(cost["total"][1] for cost in costs)
+
+
+def money_range(low: float, high: float) -> str:
     """'$12k–$18k' style range, rounded to what the estimate can honestly support."""
     def short(value: float) -> str:
         if value >= 1_000_000:

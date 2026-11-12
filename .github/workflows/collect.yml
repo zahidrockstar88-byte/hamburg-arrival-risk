@@ -46,7 +46,7 @@ jobs:
           python eta_model.py
           git add model/eta_model.json
           git commit -m "Retrain ETA model" || echo "No changes"
-      - name: Rebuild the arrivals history (carrier scorecard)
+      - name: Rebuild the arrivals history (shipping-line scorecard)
         continue-on-error: true     # same: never block the ship data upload
         run: |
           python history.py

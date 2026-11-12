@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
-from operations import after_berth, delay_cost, estimate_teu, money  # noqa: E402
+from operations import after_berth, delay_cost, estimate_teu, money_range, total_cost  # noqa: E402
 
 BERTH = datetime(2026, 11, 12, 8, 0, tzinfo=timezone.utc)
 
@@ -33,11 +33,12 @@ def hours_after_berth(moment):
 
 def test_unloading_a_large_ship_worked_example():
     # 14,000 TEU: 5 cranes. 10-25 % unloaded in Hamburg = 848-2,121 moves (1.65 TEU per move).
-    # Fastest: 848 moves at the per-ship ceiling of ~146 moves/h = 5.8 h. Slowest: 2,121 moves at 5 x 25 = 125/h = 17.0 h.
+    # Fastest: 848 moves at the fast ceiling of 3,500/day = 146 moves/h -> 5.8 h.
+    # Slowest: 2,121 moves at the slow ceiling of 2,500/day = 104 moves/h (below 5 cranes x 25 = 125) -> 20.4 h.
     plan = after_berth(BERTH, 14000, warehouse_km=30)
     assert plan["cranes"] == 5
     fast, slow = plan["unloading_hours"]
-    assert abs(fast - 5.8) < 0.1 and abs(slow - 17.0) < 0.1
+    assert abs(fast - 5.8) < 0.1 and abs(slow - 20.4) < 0.1
     first_earliest, first_latest = plan["first_ready"]
     assert hours_after_berth(first_earliest) == 2.5        # 0.5 h to start + 2 h to release
     assert hours_after_berth(first_latest) == 7.5          # 1.5 h to start + 6 h to release
@@ -66,6 +67,8 @@ def test_cost_of_one_day_late_worked_example():
     assert round(cost["ship"][0]) == 36049 and round(cost["ship"][1]) == 39843
     assert round(cost["cargo"][0]) == 1370 and round(cost["cargo"][1]) == 6849
     assert cost["rate_basis"] == "New ConTex charter index"
+    assert money_range(*cost["total"]) == "$37k–$47k"               # $37,419-46,692, rounded to what an estimate supports
+    assert total_cost([cost, cost]) == (cost["total"][0] * 2, cost["total"][1] * 2)
 
 
 def test_ship_cost_has_no_jump_between_size_bands():
@@ -101,5 +104,19 @@ def test_containers_can_also_leave_by_train():
     plan = after_berth(BERTH, 14000, warehouse_km=30)
     first_ready, all_ready = plan["first_ready"], plan["all_ready"]
     earliest_train, latest_train = plan["on_a_train"]
-    assert hours_after_berth(earliest_train) == hours_after_berth(first_ready[0]) + 2
-    assert hours_after_berth(latest_train) == hours_after_berth(all_ready[1]) + 12
+    assert abs(hours_after_berth(earliest_train) - (hours_after_berth(first_ready[0]) + 2)) < 1 / 3600
+    assert abs(hours_after_berth(latest_train) - (hours_after_berth(all_ready[1]) + 12)) < 1 / 3600
+
+
+def test_no_jump_where_sourced_rates_end_and_estimates_begin():
+    # Review finding: at 4,250 TEU the range jumped from +-5 % to +-20 % ($55.8-61.7k -> $47.0-70.5k a day).
+    sourced, estimated = delay_cost(4250, 24)["ship"], delay_cost(4251, 24)["ship"]
+    assert abs(estimated[0] - sourced[0]) < 200 and abs(estimated[1] - sourced[1]) < 200
+    assert delay_cost(14000, 24)["ship"][1] / delay_cost(14000, 24)["ship"][0] > 1.4   # much wider far from the data
+
+
+def test_crane_speed_still_widens_the_range_for_the_biggest_ships():
+    # Review finding: from ~19,000 TEU both crane rates hit the same 3,500-moves-a-day ceiling, so the only
+    # spread left was the share unloaded (10 % vs 25 % = 2.5x). Slow cranes must still make it slower.
+    fast, slow = after_berth(BERTH, 20000, warehouse_km=30)["unloading_hours"]
+    assert slow / fast > 2.5 * 1.1

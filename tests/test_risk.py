@@ -205,6 +205,7 @@ def test_old_saved_records_are_cleaned_when_loaded(tmp_path, monkeypatch):
     import config
     old = {"meta": {}, "ships": {
         "211000003": {"mmsi": "211000003", "name": "hhla  i i i", "destination": "deham", "ship_type": "seventy",
+                      "length_m": 9999,
                       "lat": 53.54, "lon": 9.97, "sog": 102.3, "cog": 360,
                       "eta": {"Month": 45, "Day": 50, "Hour": 24, "Minute": 60}},
         "bad": {"mmsi": "bad", "lat": "nowhere", "lon": 1},
@@ -220,6 +221,7 @@ def test_old_saved_records_are_cleaned_when_loaded(tmp_path, monkeypatch):
     assert s["ship_type"] is None
     assert s["sog"] is None and s["cog"] is None          # 102.3 and 360 mean "not available" in AIS
     assert s["eta"] == {"Month": 0, "Day": 0, "Hour": 24, "Minute": 60}   # impossible month/day -> "not set"
+    assert s["length_m"] is None                          # an impossible saved length is dropped on load
 
 
 # ---------------------------------------------------------------------------

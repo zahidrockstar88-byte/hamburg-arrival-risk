@@ -1,5 +1,5 @@
 """
-Checks for history.py: rebuilding real arrivals from snapshots, judging them, and the carrier scorecard.
+Checks for history.py: rebuilding real arrivals from snapshots, judging them, and the shipping-line scorecard.
 No git needed: we build small made-up snapshots with known answers.
 Run with:  python -m pytest
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from history import OTHER_LINE, build_arrivals, delay_hours, judge, load_arrivals, scorecard  # noqa: E402
+from history import UNKNOWN_LINE, build_arrivals, judge, load_arrivals, scorecard  # noqa: E402
 
 T0 = datetime(2026, 11, 9, 0, 0, tzinfo=timezone.utc)
 AT_SEA = (54.0, 7.5)            # North Sea, under way
@@ -114,17 +114,24 @@ def test_no_reported_eta_means_no_judgement():
 
 
 def test_average_delay_uses_the_middle_of_the_berthing_window():
-    # Promised at 20 h; berthed between 0 h and 21 h -> middle 10.5 h -> 9.5 h early.
-    arrival = {"promised_eta": (T0 + timedelta(hours=20)).isoformat(), "arrived_after": T0.isoformat(),
-               "arrived_by": (T0 + timedelta(hours=21)).isoformat()}
-    assert delay_hours(arrival) == -9.5
+    # Promised at 20 h; berthed between 0 h and 21 h -> middle 10.5 h -> 9.5 h early. Checked through the scorecard.
+    arrival = {"line": "MSC", "promised_eta": (T0 + timedelta(hours=20)).isoformat(),
+               "arrived_after": T0.isoformat(), "arrived_by": (T0 + timedelta(hours=21)).isoformat()}
+    assert scorecard([arrival])[0]["Average delay (h)"] == -9.5
 
 
 def test_scorecard_order_and_judged_count():
     base = {"promised_eta": T0.isoformat(), "arrived_after": T0.isoformat(),
             "arrived_by": (T0 + timedelta(hours=3)).isoformat()}
     no_eta = {**base, "promised_eta": None}
-    rows = scorecard([{**base, "line": OTHER_LINE}, {**base, "line": "MSC"}, {**no_eta, "line": "MSC"}])
-    assert [r["Shipping line"] for r in rows] == ["All ships", "MSC", OTHER_LINE]
+    rows = scorecard([{**base, "line": UNKNOWN_LINE}, {**base, "line": "MSC"}, {**no_eta, "line": "MSC"}])
+    assert [r["Shipping line"] for r in rows] == ["All ships", "MSC", UNKNOWN_LINE]
     msc = rows[1]
     assert msc["Arrivals"] == 2 and msc["Judged"] == 1             # the one without an ETA isn't judged
+
+
+def test_a_ship_with_no_reported_type_does_not_count():
+    # Review finding: the score rested mostly on unidentified ships. No reported type = maybe not a cargo ship.
+    history = snapshots([sighting("211000010", "MYSTERY", AT_SEA, 0, 20, ship_type=None)],
+                        [sighting("211000010", "MYSTERY", IN_HAMBURG, 21, 20, moored=True, ship_type=None)])
+    assert build_arrivals(history) == []

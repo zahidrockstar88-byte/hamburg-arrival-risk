@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-12T01:00:07+00:00",
+ "updated_utc": "2026-11-12T11:44:32+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -225,6 +225,33 @@
    "promised_eta": "2026-11-11T11:00:00+00:00",
    "arrived_after": "2026-11-11T17:28:13+00:00",
    "arrived_by": "2026-11-11T21:00:44+00:00"
+  },
+  {
+   "mmsi": "538090647",
+   "ship": "LILAC ROLLER",
+   "line": "Line unknown",
+   "first_seen": "2026-11-10T23:43:24+00:00",
+   "promised_eta": "2026-11-11T16:00:00+00:00",
+   "arrived_after": "2026-11-11T23:44:27+00:00",
+   "arrived_by": "2026-11-12T11:32:58+00:00"
+  },
+  {
+   "mmsi": "230693000",
+   "ship": "PRIMA LADY",
+   "line": "Line unknown",
+   "first_seen": "2026-11-10T23:42:59+00:00",
+   "promised_eta": "2026-11-11T21:00:00+00:00",
+   "arrived_after": "2026-11-11T23:36:40+00:00",
+   "arrived_by": "2026-11-12T11:43:45+00:00"
+  },
+  {
+   "mmsi": "305287000",
+   "ship": "NEUENFELDE",
+   "line": "Line unknown",
+   "first_seen": "2026-11-11T14:22:52+00:00",
+   "promised_eta": "2026-11-12T06:00:00+00:00",
+   "arrived_after": "2026-11-11T23:44:42+00:00",
+   "arrived_by": "2026-11-12T11:44:19+00:00"
   }
  ]
 }

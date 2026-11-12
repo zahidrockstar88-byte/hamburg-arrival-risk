@@ -53,12 +53,18 @@ def test_suez_or_cape_worked_example():
     assert cape["co2_t"][0] > suez["co2_t"][0]
 
 
-def test_a_route_total_adds_up_its_parts():
-    route = compare_routes(13000, speed_kn=18, suez_nm=10800, cape_nm=14040)["Suez Canal"]
-    for end in (0, 1):
-        parts = route["fuel_usd"][end] + route["ets_usd"][end] + route["charter_usd"][end] + route["toll_usd"][end]
-        assert abs(route["total_usd"][end] - parts) < 1e-6
-
+def test_what_the_cape_detour_adds_worked_example():
+    # Same voyage: 13,000 TEU at 18 kn, 7.5 extra days.
+    # Extra fuel 7.5 x 109-147 t = 817.5-1,102.5 t -> CO2 x 3.151 = 2,575.9-3,474.0 t
+    # -> EU ETS cost x 0.5 x EUR 60-90 x 1.10 = $85,006-171,962 (2,575.94 t x 33 = $85,006).
+    # Extra total = extra fuel cost (817.5 x $670 = $547,725 to 1,102.5 x $730 = $804,825) + extra ETS
+    #   + 7.5 more charter days ($87,500 a day estimate for 13,000 TEU, +-20 % = $70,000-105,000 -> $525,000-787,500)
+    #   - the Suez toll saved ($715,000-1,040,000) = $442,731-724,287. Low is compared with low, high with high.
+    detour = compare_routes(13000, speed_kn=18, suez_nm=10800, cape_nm=14040)["cape_detour"]
+    assert round(detour["co2_t"][0], 1) == 2575.9 and round(detour["co2_t"][1], 1) == 3474.0
+    assert round(detour["ets_usd"][0]) == 85006 and round(detour["ets_usd"][1]) == 171962
+    assert round(detour["total_usd"][0]) == 442731 and round(detour["total_usd"][1]) == 724287
+    assert detour["cape_is"] == "more expensive"
 
 
 def test_sailing_two_knots_slower_worked_example():
@@ -67,7 +73,15 @@ def test_sailing_two_knots_slower_worked_example():
     change = slower_by(13000, speed_kn=18, distance_nm=1000, knots_slower=2, eu_share=0.5)
     assert round(change["hours_later"], 1) == 6.9
     assert round(change["share_saved"], 3) == 0.210
-    assert change["co2_saved_t"][0] > 0 and change["money_saved_usd"][0] > 0
+
+
+def test_money_saved_by_sailing_slower_worked_example():
+    # 432 nm (1 day at 18 kn), 13,000 TEU, 18 -> 16 kn saves 21.0 % of 109-147 t = 22.9-30.9 t of fuel.
+    # CO2 saved x 3.151 = 72.1-97.2 t. Money saved = fuel ($670-730/t) + EU ETS (50 %, EUR 60-90, x1.10):
+    # 22.88 x 670 + 72.08 x 33 = $17,706 to 30.85 x 730 + 97.21 x 49.5 = $27,334.
+    change = slower_by(13000, speed_kn=18, distance_nm=432, knots_slower=2, eu_share=0.5)
+    assert round(change["co2_saved_t"][0], 1) == 72.1 and round(change["co2_saved_t"][1], 1) == 97.2
+    assert abs(change["money_saved_usd"][0] - 17706) < 2 and abs(change["money_saved_usd"][1] - 27334) < 2
 
 
 def test_cannot_slow_down_more_than_the_ship_is_going():

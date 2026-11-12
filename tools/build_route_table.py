@@ -8,11 +8,11 @@ Run once (it is not needed by the dashboard, which only reads the finished table
 
 How it works:
   - searoute (Apache-2.0, based on Eurostat's SeaRoute shipping-lane network) finds the shortest sea route.
-    Blocking the Suez Canal forces the route around Africa.
+    For the Cape route we block BOTH the Suez and the Panama Canal: with only Suez blocked, ships from China,
+    Korea and Japan were sent across the Pacific and through Panama, not around Africa (found in code review).
   - Check against published figures: Shanghai -> Rotterdam is 10,513-10,600 nm via Suez and 13,793-13,800 nm
-    via the Cape (Port Economics, Management and Policy; Carra Globe). searoute gives 10,514 and 13,479:
-    Suez is spot on, the Cape is ~2.3 % short (the network hugs the coast; real ships stay further out).
-    So every distance is multiplied by the factor that makes Shanghai -> Rotterdam match the published middle.
+    via the Cape (Port Economics, Management and Policy; Carra Globe). Each route type is multiplied by the
+    small factor that makes Shanghai -> Rotterdam match the published middle; the factors are printed and saved.
 """
 
 import json
@@ -57,7 +57,8 @@ PORTS = {
 
 
 def distance_nm(origin, destination, block_suez):
-    restrictions = ["northwest"] + (["suez"] if block_suez else [])
+    # The Cape route must not escape through Panama either.
+    restrictions = ["northwest"] + (["suez", "panama"] if block_suez else [])
     route = sr.searoute(origin, destination, units="naut", restrictions=restrictions)
     return route.properties["length"]
 

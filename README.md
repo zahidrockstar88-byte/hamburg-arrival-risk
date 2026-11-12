@@ -39,7 +39,8 @@ sanity check catches the unrealistic ones early.
     (Sea-Intelligence benchmark), in US dollars, as low–high ranges.
 12. **Routes from Asia**: for 25 Asian ports (China, Korea, Japan, Taiwan, Southeast Asia, India, Sri Lanka,
     Pakistan, Bangladesh, the Gulf), the distance to Hamburg via the Suez Canal and around the Cape of Good Hope
-    (searoute, calibrated to published figures), and what the detour adds in days, fuel, CO₂, EU ETS, ship time
+    (searoute with Suez and Panama blocked for the Cape route, within 0.4 % of published figures), and what the
+    Cape detour adds in days, fuel, CO₂, EU ETS cost, ship time
     and Suez toll, with a "Red Sea closed" switch and the extra ships a weekly service needs ([voyage.py](voyage.py)).
 13. **CO₂ and EU ETS** for each container ship's remaining trip, and what sailing 2 knots slower would save.
 

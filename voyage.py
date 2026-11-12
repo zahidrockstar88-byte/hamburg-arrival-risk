@@ -4,7 +4,7 @@ voyage.py - What a voyage burns, emits and costs, and the choice between the Sue
 Three questions, answered with RANGES (low, high):
   1. Fuel, CO2 and EU ETS cost of a trip: how much fuel a ship burns depends on its size and,
      much more, on its speed (fuel per day grows with the CUBE of speed).
-  2. Suez or the Cape: for a Shanghai -> Hamburg voyage, what does the detour around Africa add
+  2. Suez or the Cape: for a voyage from any of 25 Asian ports to Hamburg, what does the Cape detour add
      in distance, days, fuel, CO2 and money, and how many extra ships a weekly service needs?
   3. Slower sailing ("slow steaming"): what does a few knots slower save, and how much later does
      the ship arrive?
@@ -69,7 +69,29 @@ def compare_routes(teu: float, speed_kn: float, suez_nm: float, cape_nm: float) 
     result["extra_nm"] = cape_nm - suez_nm
     result["extra_days"] = extra_days
     result["extra_ships_weekly"] = math.ceil(2 * extra_days / 7)     # round trip is 2 x longer; one ship per week of delay
+    result["cape_detour"] = _what_the_cape_adds(result["Suez Canal"], result["Cape of Good Hope"])
     return result
+
+
+def _what_the_cape_adds(suez: dict, cape: dict) -> dict:
+    """
+    Cape minus Suez, for CO2, EU ETS cost and the total cost. Both routes use the same fuel price, carbon price
+    and charter rate, so the low end is compared with the low end and the high end with the high end
+    (mixing them would exaggerate the spread). Negative = the Cape is cheaper.
+    """
+    def difference(key: str) -> tuple[float, float]:
+        low = cape[key][0] - suez[key][0]
+        high = cape[key][1] - suez[key][1]
+        return low, high
+
+    total = difference("total_usd")
+    if max(total) < 0:
+        verdict = "cheaper"
+    elif min(total) > 0:
+        verdict = "more expensive"
+    else:
+        verdict = "about the same"
+    return {"co2_t": difference("co2_t"), "ets_usd": difference("ets_usd"), "total_usd": total, "cape_is": verdict}
 
 
 # ---------------------------------------------------------------------------
@@ -77,8 +99,8 @@ def compare_routes(teu: float, speed_kn: float, suez_nm: float, cape_nm: float) 
 # ---------------------------------------------------------------------------
 def slower_by(teu: float, speed_kn: float, distance_nm: float, knots_slower: float, eu_share: float) -> dict | None:
     """
-    What sailing `knots_slower` slower for `distance_nm` changes: hours later, the share of fuel saved,
-    and the fuel, CO2 and money (fuel + EU ETS) saved as (low, high). None if it would mean stopping.
+    Slow steaming: what sailing `knots_slower` slower for `distance_nm` changes: hours later, the share of fuel
+    saved, and the CO2 and money (fuel + EU ETS cost) saved as (low, high). None if it would mean stopping.
     Fuel per DAY goes with the cube of speed, but the trip takes longer, so fuel per MILE goes with the square.
     """
     new_speed = speed_kn - knots_slower
@@ -94,7 +116,6 @@ def slower_by(teu: float, speed_kn: float, distance_nm: float, knots_slower: flo
     return {
         "hours_later": (slower["days"] - now["days"]) * 24,
         "share_saved": 1 - (new_speed / speed_kn) ** 2,
-        "fuel_saved_t": saved("fuel_t"),
         "co2_saved_t": saved("co2_t"),
         "money_saved_usd": (fuel_money[0] + ets_money[0], fuel_money[1] + ets_money[1]),
     }
@@ -106,11 +127,11 @@ def slower_by(teu: float, speed_kn: float, distance_nm: float, knots_slower: flo
 ROUTES_FILE = config.DATA_DIR / "asia_routes.json"
 
 
-def load_asia_routes(path=ROUTES_FILE) -> dict:
+def load_asia_routes() -> dict:
     """{port: {"region", "suez_nm", "cape_nm"}}. Rows with missing or impossible distances are skipped."""
     import json
     try:
-        with open(path, encoding="utf-8") as f:
+        with open(ROUTES_FILE, encoding="utf-8") as f:
             saved = json.load(f)
     except (OSError, ValueError):
         return {}

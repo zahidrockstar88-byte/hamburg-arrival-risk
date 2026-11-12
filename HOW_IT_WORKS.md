@@ -97,10 +97,12 @@ Ships slow down to save fuel, wait for berths and follow tides, so a calculated 
 "Yes, as an experiment, and I measure it honestly. The GitHub Action saves a snapshot every 3 hours, and git
 keeps every version, so I rebuild which ships were at sea and when they really arrived. A straight-line model
 learns how far off the calculated ETA usually is. I test it with 'leave one ship out': each ship is predicted
-by a model that never saw it. With the first ~24 ships the model was *not* better than the plain calculation
-(about 9 h average error for both), so the dashboard says so and keeps the calculation as the main number.
-It retrains after every collection, so it can improve as data grows. Companies like project44 and Kpler use
-years of history; this shows I understand the method and its limits."
+by a model that never saw it. At first it was *not* better than the plain calculation (about 9 h average error
+for both), because it learned from the wrong moment: the first sighting near Hamburg instead of berthing. Once I
+defined arrival as 'moored at the berth' everywhere, it beat the calculation (about 6.8 h against 7.7 h on 32
+ships, Nov 2026). It's still labelled experimental, the calculated ETA stays the main number, and it retrains after
+every collection. Companies like project44 and Kpler use years of history; this shows I understand the method and
+its limits."
 
 **"Where does the news come from?"**
 "Public RSS feeds: maritime news sites (gCaptain, Splash247, The Loadstar, Hellenic Shipping News,
@@ -147,11 +149,12 @@ every assumption is written down in config.py."
 **"How does it cover network design and sustainability?"**
 "A Routes from Asia view: for 25 Asian ports I compare the sea route to Hamburg through the Suez Canal with the
 detour around the Cape of Good Hope. Distances come from searoute, which uses Eurostat's shipping-lane network,
-and I calibrated them against published Shanghai–Rotterdam figures. For each route it shows days, fuel, CO2, the
+and they match published Shanghai–Rotterdam figures to within 0.4 % (I first forgot to block the Panama Canal,
+so ships from Japan "went around Africa" via Panama; a code review caught it). For each route it shows days, fuel, CO2, the
 EU ETS cost (50 % of emissions for voyages into the EU), ship time and the Suez toll, plus a 'Red Sea closed'
-switch and how many extra ships a weekly service needs. From Shanghai the Cape adds about 3,250 nm and 8.5 days
-at 16 knots; from India and the Gulf it adds about 5,000 nm and 13 days, because they sit right next to the Red
-Sea. I also show that sailing 2 knots slower cuts fuel and CO2 by about a fifth, because fuel per mile grows with
+switch and how many extra ships a weekly service needs. From Shanghai the Cape adds about 3,240 nm and 8.4 days
+at 16 knots; from India, Pakistan and the Gulf about 4,400-4,700 nm and 11-12 days, because they sit right next to
+the Red Sea. I also show that sailing 2 knots slower cuts fuel and CO2 by about a fifth, because fuel per mile grows with
 the square of speed."
 
 **"How accurate is the shipping-line score?"**

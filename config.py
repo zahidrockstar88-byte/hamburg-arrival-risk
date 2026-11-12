@@ -180,13 +180,10 @@ CARGO_VALUE_PER_TEU_USD = 40000
 CARGO_CAPITAL_RATE = (0.05, 0.10)
 
 # ---------------------------------------------------------------------------
-# Route scenario: Suez Canal or Cape of Good Hope (Shanghai -> Hamburg)
+# Route scenario: Suez Canal or Cape of Good Hope (25 Asian ports -> Hamburg)
 # ---------------------------------------------------------------------------
-# Shanghai -> Rotterdam, nautical miles. Sourced: 10,513-10,600 via Suez, 13,793-13,800 via the Cape
-# (Port Economics, Management and Policy; Carra Globe). We use the middle and add Rotterdam -> Hamburg berth,
-# 266 nm, from our own route calculation (risk.route_to_hamburg).
-ROTTERDAM_TO_HAMBURG_NM = 266
-SHANGHAI_ROTTERDAM_NM = {"Suez Canal": 10555, "Cape of Good Hope": 13797}
+# Distances live in data/asia_routes.json, built by tools/build_route_table.py (searoute, checked against the
+# published Shanghai -> Rotterdam figures: 10,513-10,600 nm via Suez, 13,793-13,800 nm via the Cape).
 # Suez Canal toll, US$ per TEU of ship capacity (low, high). ROUGH ESTIMATE: the only figure found is
 # $0.8-1.2M for a 15,000 TEU ship (PortServiceFinder, unofficial). The 15 % container rebate was withdrawn
 # in April 2026 (Container Magazine) and a 12 % surcharge applies from July 2026 (Carra Globe).

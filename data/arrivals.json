@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-12T11:44:32+00:00",
+ "updated_utc": "2026-11-12T20:21:28+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -252,6 +252,42 @@
    "promised_eta": "2026-11-12T06:00:00+00:00",
    "arrived_after": "2026-11-11T23:44:42+00:00",
    "arrived_by": "2026-11-12T11:44:19+00:00"
+  },
+  {
+   "mmsi": "305412000",
+   "ship": "SUNSET X",
+   "line": "Line unknown",
+   "first_seen": "2026-11-11T20:56:41+00:00",
+   "promised_eta": "2026-11-12T14:00:00+00:00",
+   "arrived_after": "2026-11-12T11:43:18+00:00",
+   "arrived_by": "2026-11-12T20:15:57+00:00"
+  },
+  {
+   "mmsi": "311001824",
+   "ship": "WILSON EMS",
+   "line": "Line unknown",
+   "first_seen": "2026-11-11T17:24:33+00:00",
+   "promised_eta": "2026-11-12T12:00:00+00:00",
+   "arrived_after": "2026-11-12T11:42:13+00:00",
+   "arrived_by": "2026-11-12T20:19:30+00:00"
+  },
+  {
+   "mmsi": "256804000",
+   "ship": "CMA CGM OTELLO",
+   "line": "CMA CGM",
+   "first_seen": "2026-11-09T11:57:44+00:00",
+   "promised_eta": "2026-11-10T19:00:00+00:00",
+   "arrived_after": "2026-11-11T06:48:48+00:00",
+   "arrived_by": "2026-11-12T20:20:25+00:00"
+  },
+  {
+   "mmsi": "308919000",
+   "ship": "YEOMAN BRIDGE",
+   "line": "Line unknown",
+   "first_seen": "2026-11-11T23:44:38+00:00",
+   "promised_eta": "2026-11-10T07:00:00+00:00",
+   "arrived_after": "2026-11-11T23:44:38+00:00",
+   "arrived_by": "2026-11-12T20:20:33+00:00"
   }
  ]
 }

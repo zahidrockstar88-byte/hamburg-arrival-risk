@@ -159,11 +159,12 @@ def total_cost(costs: list[dict]) -> tuple[float, float]:
 
 
 def money_range(low: float, high: float) -> str:
-    """'$12k–$18k' style range, rounded to what the estimate can honestly support."""
+    """'$12k–$18k' style range, rounded to what the estimate can honestly support. Negative = a saving."""
     def short(value: float) -> str:
-        if value >= 1_000_000:
-            return f"${value / 1_000_000:.1f}M"
-        if value >= 1000:
-            return f"${value / 1000:.0f}k"
-        return f"${value:.0f}"
+        sign, size = ("-" if value < 0 else ""), abs(value)
+        if size >= 1_000_000:
+            return f"{sign}${size / 1_000_000:.1f}M"
+        if size >= 1000:
+            return f"{sign}${size / 1000:.0f}k"
+        return f"{sign}${size:.0f}"
     return f"{short(low)}–{short(high)}"

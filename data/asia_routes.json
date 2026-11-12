@@ -1,0 +1,135 @@
+{
+ "built_utc": "2026-11-12T01:17:32+00:00",
+ "source": "searoute 1.6.0 (Eurostat SeaRoute network), calibrated to published Shanghai-Rotterdam distances",
+ "calibration": {
+  "suez": 1.0039,
+  "cape": 1.0236
+ },
+ "routes": {
+  "Shanghai": {
+   "region": "East Asia",
+   "suez_nm": 10825,
+   "cape_nm": 14073
+  },
+  "Ningbo": {
+   "region": "East Asia",
+   "suez_nm": 10755,
+   "cape_nm": 14145
+  },
+  "Qingdao": {
+   "region": "East Asia",
+   "suez_nm": 11150,
+   "cape_nm": 14099
+  },
+  "Tianjin": {
+   "region": "East Asia",
+   "suez_nm": 11441,
+   "cape_nm": 14314
+  },
+  "Xiamen": {
+   "region": "East Asia",
+   "suez_nm": 10332,
+   "cape_nm": 13934
+  },
+  "Shenzhen (Yantian)": {
+   "region": "East Asia",
+   "suez_nm": 10128,
+   "cape_nm": 13740
+  },
+  "Hong Kong": {
+   "region": "East Asia",
+   "suez_nm": 10106,
+   "cape_nm": 13718
+  },
+  "Kaohsiung": {
+   "region": "East Asia",
+   "suez_nm": 10344,
+   "cape_nm": 13917
+  },
+  "Busan": {
+   "region": "East Asia",
+   "suez_nm": 11209,
+   "cape_nm": 13607
+  },
+  "Tokyo / Yokohama": {
+   "region": "East Asia",
+   "suez_nm": 11614,
+   "cape_nm": 13223
+  },
+  "Singapore": {
+   "region": "Southeast Asia",
+   "suez_nm": 8668,
+   "cape_nm": 12409
+  },
+  "Tanjung Pelepas": {
+   "region": "Southeast Asia",
+   "suez_nm": 8666,
+   "cape_nm": 12406
+  },
+  "Port Klang": {
+   "region": "Southeast Asia",
+   "suez_nm": 8483,
+   "cape_nm": 12228
+  },
+  "Laem Chabang": {
+   "region": "Southeast Asia",
+   "suez_nm": 9468,
+   "cape_nm": 13179
+  },
+  "Cai Mep (Ho Chi Minh City)": {
+   "region": "Southeast Asia",
+   "suez_nm": 9299,
+   "cape_nm": 13007
+  },
+  "Jakarta (Tanjung Priok)": {
+   "region": "Southeast Asia",
+   "suez_nm": 8946,
+   "cape_nm": 11937
+  },
+  "Manila": {
+   "region": "Southeast Asia",
+   "suez_nm": 10030,
+   "cape_nm": 13512
+  },
+  "Nhava Sheva (Mumbai)": {
+   "region": "South Asia",
+   "suez_nm": 6657,
+   "cape_nm": 11361
+  },
+  "Mundra": {
+   "region": "South Asia",
+   "suez_nm": 6643,
+   "cape_nm": 11563
+  },
+  "Colombo": {
+   "region": "South Asia",
+   "suez_nm": 7115,
+   "cape_nm": 11251
+  },
+  "Chennai": {
+   "region": "South Asia",
+   "suez_nm": 7713,
+   "cape_nm": 11641
+  },
+  "Chittagong": {
+   "region": "South Asia",
+   "suez_nm": 8385,
+   "cape_nm": 12326
+  },
+  "Karachi": {
+   "region": "South Asia",
+   "suez_nm": 6482,
+   "cape_nm": 11506
+  },
+  "Jebel Ali (Dubai)": {
+   "region": "Middle East Gulf",
+   "suez_nm": 6557,
+   "cape_nm": 11582
+  },
+  "Dammam": {
+   "region": "Middle East Gulf",
+   "suez_nm": 6811,
+   "cape_nm": 11841
+  }
+ }
+}

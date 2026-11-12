@@ -120,3 +120,9 @@ def test_crane_speed_still_widens_the_range_for_the_biggest_ships():
     # spread left was the share unloaded (10 % vs 25 % = 2.5x). Slow cranes must still make it slower.
     fast, slow = after_berth(BERTH, 20000, warehouse_km=30)["unloading_hours"]
     assert slow / fast > 2.5 * 1.1
+
+
+def test_money_ranges_can_be_negative():
+    # A saving shows as a negative difference: -$2,000 to $5,000 -> "-$2k–$5k".
+    assert money_range(-2000, 5000) == "-$2k–$5k"
+    assert money_range(-1953544, -300000) == "-$2.0M–-$300k"

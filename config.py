@@ -178,3 +178,32 @@ SHIP_RATE_ESTIMATED = [(8000, 75000), (14000, 90000), (20000, 105000)]
 # at a 5 % or 10 % annual rate. Per TEU per day: 40,000 x rate / 365.
 CARGO_VALUE_PER_TEU_USD = 40000
 CARGO_CAPITAL_RATE = (0.05, 0.10)
+
+# ---------------------------------------------------------------------------
+# Route scenario: Suez Canal or Cape of Good Hope (Shanghai -> Hamburg)
+# ---------------------------------------------------------------------------
+# Shanghai -> Rotterdam, nautical miles. Sourced: 10,513-10,600 via Suez, 13,793-13,800 via the Cape
+# (Port Economics, Management and Policy; Carra Globe). We use the middle and add Rotterdam -> Hamburg berth,
+# 266 nm, from our own route calculation (risk.route_to_hamburg).
+ROTTERDAM_TO_HAMBURG_NM = 266
+SHANGHAI_ROTTERDAM_NM = {"Suez Canal": 10555, "Cape of Good Hope": 13797}
+# Suez Canal toll, US$ per TEU of ship capacity (low, high). ROUGH ESTIMATE: the only figure found is
+# $0.8-1.2M for a 15,000 TEU ship (PortServiceFinder, unofficial). The 15 % container rebate was withdrawn
+# in April 2026 (Container Magazine) and a 12 % surcharge applies from July 2026 (Carra Globe).
+SUEZ_TOLL_PER_TEU_USD = (55, 80)
+
+# ---------------------------------------------------------------------------
+# Fuel and CO2
+# ---------------------------------------------------------------------------
+# Fuel burn at a reference point: a ~13,000 TEU ship at 18 knots burns about 109 t a day (Octodive). Older or
+# less efficient ships burn more, so the high end is +35 % (assumption). Other sizes and speeds are scaled
+# with the usual rules of thumb: fuel per day grows with size^(2/3) and with the CUBE of speed.
+FUEL_REFERENCE = {"teu": 13000, "speed_kn": 18, "tonnes_per_day": (109, 147)}
+CO2_PER_TONNE_FUEL = 3.151          # t CO2 per t of low-sulphur fuel oil (IMO carbon factor for LFO)
+FUEL_PRICE_PER_TONNE_USD = (670, 730)   # VLSFO, Rotterdam, Sept-Oct 2026 (Ship & Bunker via Yahoo Finance; Skyra)
+# EU ETS 2026: ships pay for 100 % of emissions; voyages into or out of the EU count 50 %, voyages between EU
+# ports 100 % (ZeroNorth, DataPortuaria). Allowance price moved between ~EUR 60 and 90 a tonne in 2026.
+ETS_PRICE_PER_TONNE_EUR = (60, 90)
+ETS_SHARE_FROM_OUTSIDE_EU = 0.5
+ETS_SHARE_BETWEEN_EU_PORTS = 1.0
+EUR_TO_USD = 1.10                   # assumption, to show every cost in one currency

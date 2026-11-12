@@ -27,7 +27,7 @@ import streamlit as st
 import importlib
 import sys
 
-for _module in ("config", "safety", "risk", "news", "history", "operations", "eta_model"):
+for _module in ("config", "safety", "risk", "news", "history", "operations", "voyage", "eta_model"):
     if _module in sys.modules:
         importlib.reload(sys.modules[_module])
 
@@ -41,6 +41,7 @@ from risk import (ARRIVAL_FLAGS, ARRIVED, ARRIVING, CHART_FLAGS, CHECK, IN_ANOTH
                   parse_time)
 from operations import after_berth, delay_cost, estimate_teu, money_range, total_cost  # noqa: E402
 from safety import clean_saved_ship, md, safe_link  # noqa: E402
+from voyage import compare_routes, load_asia_routes, slower_by, voyage_emissions  # noqa: E402
 
 st.set_page_config(page_title="Hamburg Arrival Risk Monitor", page_icon=":material/anchor:", layout="wide")
 
@@ -294,8 +295,8 @@ for headline in top_news:
     st.markdown(f"{headline_markdown(headline)} "
                 f"({md(headline['source'])}, {md(news_date(headline['published']))})")
 
-tab_ships, tab_lines, tab_news, tab_method = st.tabs(
-    ["Ships", "Shipping lines", "News and disruptions", "How it works"])
+tab_ships, tab_lines, tab_routes, tab_news, tab_method = st.tabs(
+    ["Ships", "Shipping lines", "Routes from Asia", "News and disruptions", "How it works"])
 
 # ---------------------------------------------------------------------------
 # Ships: map, table, one-ship detail
@@ -443,6 +444,20 @@ with tab_ships:
                 st.markdown(md(f"Running about {cost['days'] * 24:.0f} h late costs roughly "
                                f"{money_range(*cost['total'])} ({money_range(*cost['ship'])} ship time, "
                                f"{money_range(*cost['cargo'])} tied-up cargo). Ship rate from: {cost['rate_basis']}."))
+            speed = detail["Speed (kn)"]
+            speed = speed if not pd.isna(speed) and config.MIN_VALID_SPEED_KN <= speed <= config.MAX_VALID_SPEED_KN \
+                else config.TYPICAL_SPEED_KN
+            into_eu = voyage_emissions(detail_teu, speed, detail["Distance (nm)"], config.ETS_SHARE_FROM_OUTSIDE_EU)
+            within_eu = voyage_emissions(detail_teu, speed, detail["Distance (nm)"], config.ETS_SHARE_BETWEEN_EU_PORTS)
+            co2_low, co2_high = into_eu["co2_t"]
+            st.markdown(md(f"The rest of its trip ({detail['Distance (nm)']:,} nm at {speed:.0f} kn) emits about "
+                           f"{co2_low:,.0f} to {co2_high:,.0f} t of CO2, costing {money_range(into_eu['ets_usd'][0], within_eu['ets_usd'][1])} "
+                           f"under the EU ETS (50 % if it comes from outside the EU, 100 % from an EU port)."))
+            slower = slower_by(detail_teu, speed, detail["Distance (nm)"], 2, config.ETS_SHARE_FROM_OUTSIDE_EU)
+            if slower and detail["Distance (nm)"] > 50:
+                st.markdown(md(f"Sailing 2 knots slower would save about {slower['share_saved']:.0%} of that fuel and "
+                               f"CO2 ({money_range(*slower['money_saved_usd'])}), arriving "
+                               f"{slower['hours_later']:.0f} h later."))
             st.caption("Estimates from the assumptions under How it works, with customs cleared before arrival. "
                        "If containers stay at the terminal beyond the free days, demurrage starts; if empty "
                        "containers come back late, detention starts. Both depend on your contract, not on this "
@@ -498,6 +513,105 @@ with tab_lines:
                 "Berthed between": f"{nice_time(parse_time(a['arrived_after']))} and "
                                    f"{nice_time(parse_time(a['arrived_by']))}",
             } for a in reversed(arrivals)]), hide_index=True, width="stretch")
+
+# ---------------------------------------------------------------------------
+# Routes from Asia: Suez Canal or Cape of Good Hope (network design + CO2)
+# ---------------------------------------------------------------------------
+with tab_routes:
+    asia = load_asia_routes()
+    if not asia:
+        st.subheader("No route table yet")
+        st.markdown("Run `python tools/build_route_table.py` to build data/asia_routes.json.")
+    else:
+        regions = sorted({row["region"] for row in asia.values()})
+        pick_col, size_col, speed_col = st.columns([2, 1, 1])
+        with pick_col:
+            origin = st.selectbox("From", list(asia), index=list(asia).index("Shanghai") if "Shanghai" in asia else 0,
+                                  format_func=lambda port: f"{port} ({asia[port]['region']})")
+        with size_col:
+            route_teu = st.slider("Ship size (TEU)", 1000, 24000, 14000, step=500)
+        with speed_col:
+            route_speed = st.slider("Speed (knots)", 12, 22, 16)
+        red_sea_closed = st.toggle("Red Sea closed: every ship must go around Africa",
+                                   help="Shows what changes when the Suez route is not available at all.")
+
+        leg = asia[origin]
+        comparison = compare_routes(route_teu, route_speed, leg["suez_nm"], leg["cape_nm"])
+        suez, cape = comparison["Suez Canal"], comparison["Cape of Good Hope"]
+        # Both routes share the same fuel price, carbon price and charter rate, so compare low with low and high
+        # with high (comparing the cheapest case of one with the dearest of the other would exaggerate the spread).
+        extra_cost = (cape["total_usd"][0] - suez["total_usd"][0], cape["total_usd"][1] - suez["total_usd"][1])
+        st.subheader(md(f"From {origin}, the Cape adds {comparison['extra_nm']:,} nm and "
+                        f"{comparison['extra_days']:.1f} days at {route_speed} knots"))
+        cheaper = ("cheaper" if max(extra_cost) < 0 else "more expensive" if min(extra_cost) > 0
+                   else "about the same")
+        st.markdown(md(
+            f"For a {route_teu:,} TEU ship, the Cape route is {cheaper} per voyage once fuel, CO2, ship time and the "
+            f"Suez toll are counted (difference {money_range(*sorted(extra_cost))}), and emits about "
+            f"{cape['co2_t'][0] - suez['co2_t'][0]:,.0f} to {cape['co2_t'][1] - suez['co2_t'][1]:,.0f} t more CO2."))
+        if red_sea_closed:
+            st.warning(md(
+                f"With the Red Sea closed, every voyage from {origin} takes the Cape: {comparison['extra_days']:.1f} "
+                f"days longer each way. A weekly service needs {comparison['extra_ships_weekly']} more ship(s) to keep "
+                f"one departure a week, and Hamburg's ETAs for these ships move back by the same days."),
+                icon=":material/block:")
+
+        def per_route(key: str, money: bool = False, unit: str = "") -> list[str]:
+            cells = []
+            for route in (suez, cape):
+                low, high = route[key]
+                cells.append(money_range(low, high) if money else f"{low:,.0f} to {high:,.0f}{unit}")
+            return cells
+
+        st.dataframe(pd.DataFrame({
+            "": ["Distance", "Days at sea", "Fuel", "CO2", "EU ETS (50 %)", "Fuel cost", "Ship time (charter)",
+                 "Suez toll", "Total"],
+            "Suez Canal": [f"{suez['distance_nm']:,} nm", f"{suez['days']:.1f}"] + [c for c in
+                           (per_route("fuel_t", unit=" t")[0], per_route("co2_t", unit=" t")[0],
+                            per_route("ets_usd", True)[0], per_route("fuel_usd", True)[0],
+                            per_route("charter_usd", True)[0], money_range(*suez["toll_usd"]) + " (rough estimate)",
+                            per_route("total_usd", True)[0])],
+            "Cape of Good Hope": [f"{cape['distance_nm']:,} nm", f"{cape['days']:.1f}"] + [c for c in
+                                  (per_route("fuel_t", unit=" t")[1], per_route("co2_t", unit=" t")[1],
+                                   per_route("ets_usd", True)[1], per_route("fuel_usd", True)[1],
+                                   per_route("charter_usd", True)[1], "none",
+                                   per_route("total_usd", True)[1])],
+        }), hide_index=True, width="stretch")
+
+        st.markdown("**Sail slower to save fuel?**")
+        cape_slower = slower_by(route_teu, route_speed, leg["cape_nm"], 2, config.ETS_SHARE_FROM_OUTSIDE_EU)
+        if cape_slower:
+            st.markdown(md(f"Going around the Cape 2 knots slower ({route_speed - 2} instead of {route_speed}) saves "
+                           f"about {cape_slower['share_saved']:.0%} of the fuel and CO2 "
+                           f"({cape_slower['co2_saved_t'][0]:,.0f} to {cape_slower['co2_saved_t'][1]:,.0f} t, "
+                           f"{money_range(*cape_slower['money_saved_usd'])}) but arrives "
+                           f"{cape_slower['hours_later'] / 24:.1f} days later."))
+
+        st.markdown("**Every Asian port, at this ship size and speed**")
+        all_ports = []
+        for port, row in asia.items():
+            port_comparison = compare_routes(route_teu, route_speed, row["suez_nm"], row["cape_nm"])
+            p_suez, p_cape = port_comparison["Suez Canal"], port_comparison["Cape of Good Hope"]
+            all_ports.append({
+                "From": port, "Region": row["region"], "Via Suez (nm)": row["suez_nm"],
+                "Via the Cape (nm)": row["cape_nm"], "Detour (nm)": port_comparison["extra_nm"],
+                "Extra days": round(port_comparison["extra_days"], 1),
+                "Extra CO2 (t)": f"{p_cape['co2_t'][0] - p_suez['co2_t'][0]:,.0f} to "
+                                 f"{p_cape['co2_t'][1] - p_suez['co2_t'][1]:,.0f}",
+                "Extra ships, weekly service": port_comparison["extra_ships_weekly"],
+            })
+        all_ports_table = pd.DataFrame(all_ports).sort_values("Extra days", ascending=False)
+        st.dataframe(all_ports_table, hide_index=True, width="stretch", column_config={
+            "Via Suez (nm)": st.column_config.NumberColumn(format="%d"),
+            "Via the Cape (nm)": st.column_config.NumberColumn(format="%d"),
+            "Detour (nm)": st.column_config.NumberColumn(format="%d")})
+        st.caption(
+            "Distances from searoute (Eurostat's shipping-lane network), checked against published Shanghai to "
+            "Rotterdam figures and calibrated to them (Suez within 0.4 %, Cape +2.4 %). Fuel from a ~13,000 TEU "
+            "ship burning ~109 t a day at 18 knots, scaled by size and the cube of speed; CO2 = 3.151 t per t of fuel "
+            "(IMO); EU ETS at 50 % for voyages into the EU, EUR 60-90 a tonne; fuel $670-730 a tonne (Rotterdam, "
+            "Sept-Oct 2026). The Suez toll is a rough estimate: no official per-size table could be verified. "
+            "South Asia and the Gulf lose the most from a Red Sea closure because they sit right next to it.")
 
 # ---------------------------------------------------------------------------
 # News and disruptions, plus the hand-written chokepoint notes
@@ -569,6 +683,10 @@ with tab_method:
    share unloaded in Hamburg, the average number of cranes and their speed give an unloading time; then yard
    release, and either a train or the truck trip to your warehouse. Every step is a range from fastest to slowest.
 10. **Cost of delay**: the ship's time (charter rate per day) plus the capital tied up in the delayed cargo.
+11. **Routes from Asia**: for 25 Asian ports, the sea distance to Hamburg via the Suez Canal and around the Cape
+    of Good Hope, and what the detour costs in days, fuel, CO2, EU ETS, ship time and Suez toll.
+12. **CO2**: fuel from ship size and speed (fuel per day grows with the cube of speed), CO2 from fuel, and the
+    EU ETS cost: 50 % of emissions for voyages into the EU, 100 % between EU ports.
 """)
         st.subheader("Assumptions behind the estimates")
         share_low, share_high = config.UNLOAD_SHARE_RANGE
@@ -588,6 +706,9 @@ with tab_method:
 - Unloading starts {config.START_UNLOADING_AFTER_BERTH_H[0]} to {config.START_UNLOADING_AFTER_BERTH_H[1]} h after berthing; containers are available for pickup {config.READY_FOR_PICKUP_AFTER_UNLOAD_H[0]} to {config.READY_FOR_PICKUP_AFTER_UNLOAD_H[1]} h after unloading; a train within {config.RAIL_WAIT_FOR_TRAIN_H[0]} to {config.RAIL_WAIT_FOR_TRAIN_H[1]} h; trucks at {config.TRUCK_SPEED_KMH[0]} to {config.TRUCK_SPEED_KMH[1]} km/h plus {config.TERMINAL_GATE_H[0]} to {config.TERMINAL_GATE_H[1]} h at the gate (assumptions).
 - Ship time, sourced (New ConTex charter index, Aug to Oct 2026): {sourced} a day. Estimated beyond the index: {estimated} a day. Shown as plus or minus {narrow[1]:.0%} up to {narrow[0]:,} TEU, widening smoothly to {wide[1]:.0%} at {wide[0]:,} TEU and above.
 - Cargo: ${config.CARGO_VALUE_PER_TEU_USD:,} per TEU (Sea-Intelligence benchmark) at {rate_low:.0%} to {rate_high:.0%} a year.
+- Fuel: about {config.FUEL_REFERENCE['tonnes_per_day'][0]} to {config.FUEL_REFERENCE['tonnes_per_day'][1]} t a day for a {config.FUEL_REFERENCE['teu']:,} TEU ship at {config.FUEL_REFERENCE['speed_kn']} knots (sourced low end, +35 % for less efficient ships), scaled by size^(2/3) and speed^3; ${config.FUEL_PRICE_PER_TONNE_USD[0]} to ${config.FUEL_PRICE_PER_TONNE_USD[1]} a tonne (Rotterdam, Sept-Oct 2026).
+- CO2: {config.CO2_PER_TONNE_FUEL} t per t of fuel (IMO). EU ETS: EUR {config.ETS_PRICE_PER_TONNE_EUR[0]} to {config.ETS_PRICE_PER_TONNE_EUR[1]} a tonne, {config.ETS_SHARE_FROM_OUTSIDE_EU:.0%} of emissions into the EU, {config.ETS_SHARE_BETWEEN_EU_PORTS:.0%} between EU ports; EUR 1 = ${config.EUR_TO_USD} (assumption).
+- Suez toll: ${config.SUEZ_TOLL_PER_TEU_USD[0]} to ${config.SUEZ_TOLL_PER_TEU_USD[1]} per TEU of ship capacity, a rough estimate (the only figure found is unofficial; the 15 % rebate was withdrawn in April 2026).
 """)
         st.subheader("Experimental ML estimate")
         if model:
@@ -634,6 +755,9 @@ with tab_method:
 - **Unloading times and costs are estimates** built from published averages and stated assumptions. Real
   unloading depends on the terminal, the stowage plan and the weather; real costs depend on contracts we
   can't see.
+- **Route and CO2 figures are estimates.** Real ships don't sail the shortest line, burn fuel according to their
+  own engines and weather, and pay tolls from tables we couldn't verify. They are good for comparing routes,
+  not for a ship's actual bill.
 """)
 
 # ---------------------------------------------------------------------------

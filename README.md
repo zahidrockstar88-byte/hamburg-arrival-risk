@@ -37,6 +37,11 @@ sanity check catches the unrealistic ones early.
     ([operations.py](operations.py)).
 11. **Cost of delay**: ship time from the New ConTex charter index plus the capital tied up in delayed cargo
     (Sea-Intelligence benchmark), in US dollars, as low–high ranges.
+12. **Routes from Asia**: for 25 Asian ports (China, Korea, Japan, Taiwan, Southeast Asia, India, Sri Lanka,
+    Pakistan, Bangladesh, the Gulf), the distance to Hamburg via the Suez Canal and around the Cape of Good Hope
+    (searoute, calibrated to published figures), and what the detour adds in days, fuel, CO₂, EU ETS, ship time
+    and Suez toll, with a "Red Sea closed" switch and the extra ships a weekly service needs ([voyage.py](voyage.py)).
+13. **CO₂ and EU ETS** for each container ship's remaining trip, and what sailing 2 knots slower would save.
 
 ## Security
 
@@ -88,6 +93,8 @@ Python · Streamlit · pydeck · NumPy · AISStream.io websocket API · RSS (def
 - News is matched by keyword, so it can miss stories or include loosely related ones.
 - Shipping-line scores are measured against the ETA a ship reported when we first saw it (usually a day or two out),
   not the published schedule, so they are higher than industry reliability reports. Few arrivals per line so far.
+- Route distances come from a shipping-lane network, not real tracks; fuel and CO₂ use published averages and
+  the cube-of-speed rule; the Suez toll is a rough estimate (no official per-size table could be verified).
 - Unloading times and delay costs are estimates from published averages and stated assumptions (see
   `config.py`), not terminal or contract data.
 

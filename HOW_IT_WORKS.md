@@ -144,6 +144,16 @@ Sea-Intelligence's $40,000-per-TEU benchmark. I left demurrage and detention out
 containers left at the terminal or returned late, so a late ship doesn't cause them. Everything is a range, and
 every assumption is written down in config.py."
 
+**"How does it cover network design and sustainability?"**
+"A Routes from Asia view: for 25 Asian ports I compare the sea route to Hamburg through the Suez Canal with the
+detour around the Cape of Good Hope. Distances come from searoute, which uses Eurostat's shipping-lane network,
+and I calibrated them against published Shanghai–Rotterdam figures. For each route it shows days, fuel, CO2, the
+EU ETS cost (50 % of emissions for voyages into the EU), ship time and the Suez toll, plus a 'Red Sea closed'
+switch and how many extra ships a weekly service needs. From Shanghai the Cape adds about 3,250 nm and 8.5 days
+at 16 knots; from India and the Gulf it adds about 5,000 nm and 13 days, because they sit right next to the Red
+Sea. I also show that sailing 2 knots slower cuts fuel and CO2 by about a fifth, because fuel per mile grows with
+the square of speed."
+
 **"How accurate is the shipping-line score?"**
 "We only look every 3 hours, so I never know the exact berthing time, only a window. I only call a ship on
 time or late when the whole window agrees; otherwise it's 'unclear'. And a line needs at least three judged

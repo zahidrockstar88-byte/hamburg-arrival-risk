@@ -86,6 +86,22 @@ The estimated cost of a ship that is likely to berth later than the ETA its crew
 plus the capital tied up in its Hamburg cargo.
 _Avoid_: Demurrage, detention (fees for containers left at the terminal or returned late, after unloading)
 
+## Routes and emissions
+
+**Cape detour**:
+The extra distance and time of sailing from Asia to Hamburg around the Cape of Good Hope instead of through
+the Suez Canal.
+_Avoid_: Diversion, rerouting (when the specific detour is meant)
+
+**EU ETS cost**:
+What a ship pays for its CO2 under the EU Emissions Trading System: half of the emissions on a voyage into
+the EU, all of them between EU ports.
+_Avoid_: Carbon tax
+
+**Slow steaming**:
+Sailing deliberately slower than a ship can, to burn less fuel and emit less CO2, at the cost of arriving later.
+_Avoid_: Delay (it is a choice, not a disruption)
+
 ## Risk
 
 **Risk flag**:

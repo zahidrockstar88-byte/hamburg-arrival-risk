@@ -99,3 +99,11 @@ def test_airline_pilots_are_not_port_pilots_and_sea_storms_count():
     assert classify("North Sea storm warning")["kind"] == "Weather"
     assert classify("Gale warning for the English Channel")["place"] == "English Channel"
     assert classify("Elbe flood hits Dresden old town") is None          # still not about ships
+
+
+def test_research_articles_are_not_disruptions():
+    # Seen on the live site: a science article about storm-wind models passed as a North Sea storm.
+    assert classify("Coupled Multiscale Modeling Improves North Sea Storm Wind Predictions") is None
+    assert classify("Researchers study storm surges in the German Bight") is None
+    assert classify("North Sea storm warning") is not None                 # a real warning still counts
+    assert classify("Sturmflut an der Nordsee: Bundesamt warnt vor hohen Wasserständen") is not None

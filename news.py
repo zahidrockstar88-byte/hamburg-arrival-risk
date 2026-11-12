@@ -117,7 +117,10 @@ STRIKE_CONTEXT = ["port", "ports", "dock", "docks", "dockworkers", "dockers", "l
 OFF_TOPIC = ["platform", "oilfield", "oil field", "gas field", "rig", "offshore worker", "offshore workers",
              "cruise", "kreuzfahrt", "football", "bundesliga", "hsv", "st. pauli", "marathon", "concert",
              "airport", "flughafen", "flights", "flüge", "airline", "airlines", "lufthansa", "eurowings", "condor",
-             "cockpit", "hockey", "eishockey", "coral", "reef"]
+             "cockpit", "hockey", "eishockey", "coral", "reef",
+             # research and science articles: about storms in general, not a storm hitting ships now
+             "modeling", "modelling", "model", "models", "study", "studies", "research", "researchers",
+             "scientists", "studie", "forscher"]
 
 USER_AGENT = "HamburgArrivalRiskMonitor/1.0 (+https://github.com/zahidrockstar88-byte/hamburg-arrival-risk)"
 TIMEOUT_SECONDS = 10

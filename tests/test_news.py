@@ -105,5 +105,6 @@ def test_research_articles_are_not_disruptions():
     # Seen on the live site: a science article about storm-wind models passed as a North Sea storm.
     assert classify("Coupled Multiscale Modeling Improves North Sea Storm Wind Predictions") is None
     assert classify("Researchers study storm surges in the German Bight") is None
+    assert classify("Beliebter Nordsee-Strand durch Sturm zerstört") is None      # a beach, not shipping
     assert classify("North Sea storm warning") is not None                 # a real warning still counts
     assert classify("Sturmflut an der Nordsee: Bundesamt warnt vor hohen Wasserständen") is not None

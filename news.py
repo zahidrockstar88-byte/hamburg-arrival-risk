@@ -120,7 +120,9 @@ OFF_TOPIC = ["platform", "oilfield", "oil field", "gas field", "rig", "offshore 
              "cockpit", "hockey", "eishockey", "coral", "reef",
              # research and science articles: about storms in general, not a storm hitting ships now
              "modeling", "modelling", "model", "models", "study", "studies", "research", "researchers",
-             "scientists", "studie", "forscher"]
+             "scientists", "studie", "forscher",
+             # beaches and tourism: storm news that doesn't affect ships
+             "beach", "beaches", "tourists", "holiday", "strand", "urlaub", "touristen", "badegäste"]
 
 USER_AGENT = "HamburgArrivalRiskMonitor/1.0 (+https://github.com/zahidrockstar88-byte/hamburg-arrival-risk)"
 TIMEOUT_SECONDS = 10

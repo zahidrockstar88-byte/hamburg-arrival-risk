@@ -72,6 +72,11 @@ TYPICAL_SPEED_KN = 14.0
 MIN_VALID_SPEED_KN = 3.0
 MAX_VALID_SPEED_KN = 26.0
 
+# Starting values on the Routes from Asia tab, also used by the "Red Sea closed" note on the Ships tab,
+# so both tabs show the same days for the same port.
+ROUTE_DEFAULT_TEU = 14000          # a typical Asia-Europe container ship
+ROUTE_DEFAULT_SPEED_KN = 16        # a common Asia-Europe service speed
+
 # A ship this close to Hamburg counts as arriving (nautical miles).
 ARRIVED_WITHIN_NM = 15
 

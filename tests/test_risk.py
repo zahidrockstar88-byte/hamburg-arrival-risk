@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from collector import handle_message  # noqa: E402
 from risk import (CONTAINER_LIKELY, CONTAINER_UNKNOWN, CONTAINER_UNLIKELY,  # noqa: E402
                   assess_ship, container_guess, container_terminal, distance_nm, is_bound_for_hamburg,
-                  is_cargo_type, is_moored, parse_ais_eta, sea_area, shipping_line)
+                  is_cargo_type, is_moored, parse_ais_eta, sea_area, shipping_line, usable_speed)
 
 NOW = datetime(2026, 10, 25, 12, 0, tzinfo=timezone.utc)
 
@@ -269,3 +269,11 @@ def test_anchored_ship_near_hamburg_is_waiting_not_arrived():
     moored = assess_ship(ship(lat=53.6, lon=9.7, sog=0.0, nav_status=5, eta=eta_in(2)), NOW)
     assert moored["Status"] == "Arrived"
 
+
+
+def test_usable_speed_falls_back_to_the_typical_speed():
+    # The ship's own speed counts only between 3 and 26 knots; otherwise the typical 14 knots is used.
+    assert usable_speed(16.0) == 16.0
+    assert usable_speed(3.0) == 3.0 and usable_speed(26.0) == 26.0      # the limits still count
+    for not_usable in [None, float("nan"), 0.4, 2.9, 40.0]:
+        assert usable_speed(not_usable) == 14.0, not_usable

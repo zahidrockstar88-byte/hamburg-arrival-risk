@@ -108,3 +108,19 @@ def test_research_articles_are_not_disruptions():
     assert classify("Beliebter Nordsee-Strand durch Sturm zerstört") is None      # a beach, not shipping
     assert classify("North Sea storm warning") is not None                 # a real warning still counts
     assert classify("Sturmflut an der Nordsee: Bundesamt warnt vor hohen Wasserständen") is not None
+
+
+def test_research_and_beach_words_do_not_hide_real_ship_disruptions():
+    # Code review: "beach", "holiday", "model" and "study" dropped real disruptions. These name ships,
+    # ports or docks, so they are kept.
+    for headline in ["Containers from MSC ship wash up on Dutch beaches after North Sea storm",
+                     "Container ship runs aground off beach near Elbe mouth",
+                     "Hamburg port strike planned before holiday",
+                     "Dockworkers strike at Rotterdam over new pay model",
+                     "Study: Red Sea attacks force ships around the Cape",
+                     "Researchers warn of Suez Canal congestion",
+                     "Urlaubszeit: Stau vor dem Hamburger Hafen"]:
+        assert classify(headline) is not None, headline
+    # Without a ship word they are still background stories, not disruptions.
+    assert classify("Tourists flee North Sea beach as storm hits") is None
+    assert classify("Forscher warnen vor Sturm an der Nordsee") is None

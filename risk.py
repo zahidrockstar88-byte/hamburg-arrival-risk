@@ -260,6 +260,13 @@ def is_cargo_type(ship_type) -> bool | None:
         return None
 
 
+def usable_speed(sog) -> float:
+    """The ship's own speed if it looks real (3-26 knots), otherwise the typical speed of 14 knots."""
+    if sog is None or sog != sog or not config.MIN_VALID_SPEED_KN <= sog <= config.MAX_VALID_SPEED_KN:
+        return config.TYPICAL_SPEED_KN                 # (sog != sog is how Python spots "not a number")
+    return float(sog)
+
+
 def is_moored(ship: dict) -> bool:
     """
     True if the ship says it is moored (AIS status 5), or is not moving (under 0.5 knots) and is NOT at anchor.
@@ -346,10 +353,8 @@ def assess_ship(ship: dict, now: datetime | None = None, settings: dict | None =
     in_another_port = ship.get("nav_status") == 5      # the crew says "moored" (used when not in Hamburg)
     waiting = (sog is not None and sog < 1.0) or ship.get("nav_status") == 1   # 1 = at anchor
     stopped = waiting or in_another_port               # not moving, for whatever reason (used by eta_model.py)
-    if sog is not None and config.MIN_VALID_SPEED_KN <= sog <= config.MAX_VALID_SPEED_KN:
-        speed, speed_note = sog, "current speed"
-    else:
-        speed, speed_note = config.TYPICAL_SPEED_KN, "typical speed (current speed not usable)"
+    speed = usable_speed(sog)
+    speed_note = "current speed" if speed == sog else "typical speed (current speed not usable)"
 
     # --- Calculated ETA: from the time of the last position, not from now ---
     hours_to_go = route["sea_nm"] / speed + route["slow_hours"] + config.PILOT_AND_BERTH_BUFFER_HOURS

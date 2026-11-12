@@ -46,6 +46,11 @@ def voyage_emissions(teu: float, speed_kn: float, distance_nm: float, eu_share: 
     }
 
 
+def _minus(a: tuple, b: tuple) -> tuple[float, float]:
+    """(low, high) of a minus (low, high) of b: low with low, high with high (same prices on both sides)."""
+    return a[0] - b[0], a[1] - b[1]
+
+
 # ---------------------------------------------------------------------------
 # 2. Suez Canal or Cape of Good Hope
 # ---------------------------------------------------------------------------
@@ -73,6 +78,22 @@ def compare_routes(teu: float, speed_kn: float, suez_nm: float, cape_nm: float) 
     return result
 
 
+def red_sea_closed_by_region(routes: dict, teu: float, speed_kn: float) -> dict:
+    """
+    If the Red Sea closes, every voyage from Asia takes the Cape. Per region: how many extra days (shortest and
+    longest port) and how much extra each voyage costs (cheapest low end to dearest high end).
+    routes: {port: {"region", "suez_nm", "cape_nm"}}, as from load_asia_routes().
+    """
+    by_region = {}
+    for row in routes.values():
+        comparison = compare_routes(teu, speed_kn, row["suez_nm"], row["cape_nm"])
+        by_region.setdefault(row["region"], []).append(comparison)
+    return {region: {"days": (min(c["extra_days"] for c in ports), max(c["extra_days"] for c in ports)),
+                     "cost_usd": (min(c["cape_detour"]["total_usd"][0] for c in ports),
+                                  max(c["cape_detour"]["total_usd"][1] for c in ports))}
+            for region, ports in by_region.items()}
+
+
 def _what_the_cape_adds(suez: dict, cape: dict) -> dict:
     """
     Cape minus Suez, for CO2, EU ETS cost and the total cost. Both routes use the same fuel price, carbon price
@@ -80,9 +101,7 @@ def _what_the_cape_adds(suez: dict, cape: dict) -> dict:
     (mixing them would exaggerate the spread). Negative = the Cape is cheaper.
     """
     def difference(key: str) -> tuple[float, float]:
-        low = cape[key][0] - suez[key][0]
-        high = cape[key][1] - suez[key][1]
-        return low, high
+        return _minus(cape[key], suez[key])
 
     total = difference("total_usd")
     if max(total) < 0:
@@ -110,7 +129,7 @@ def slower_by(teu: float, speed_kn: float, distance_nm: float, knots_slower: flo
     slower = voyage_emissions(teu, new_speed, distance_nm, eu_share)
 
     def saved(key: str) -> tuple[float, float]:
-        return now[key][0] - slower[key][0], now[key][1] - slower[key][1]
+        return _minus(now[key], slower[key])
 
     fuel_money, ets_money = saved("fuel_usd"), saved("ets_usd")
     return {
@@ -128,13 +147,17 @@ ROUTES_FILE = config.DATA_DIR / "asia_routes.json"
 
 
 def load_asia_routes() -> dict:
-    """{port: {"region", "suez_nm", "cape_nm"}}. Rows with missing or impossible distances are skipped."""
+    """{port: {"region", "suez_nm", "cape_nm"}} from data/asia_routes.json, cleaned. Empty if the file is missing."""
     import json
     try:
         with open(ROUTES_FILE, encoding="utf-8") as f:
-            saved = json.load(f)
+            return clean_asia_routes(json.load(f))
     except (OSError, ValueError):
         return {}
+
+
+def clean_asia_routes(saved) -> dict:
+    """Keep only rows with two real distances (1,000-20,000 nm) where the Cape is longer. The file is untrusted."""
     routes = saved.get("routes") if isinstance(saved, dict) else None
     clean = {}
     for port, row in (routes.items() if isinstance(routes, dict) else []):

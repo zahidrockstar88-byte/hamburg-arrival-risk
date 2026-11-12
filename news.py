@@ -117,12 +117,13 @@ STRIKE_CONTEXT = ["port", "ports", "dock", "docks", "dockworkers", "dockers", "l
 OFF_TOPIC = ["platform", "oilfield", "oil field", "gas field", "rig", "offshore worker", "offshore workers",
              "cruise", "kreuzfahrt", "football", "bundesliga", "hsv", "st. pauli", "marathon", "concert",
              "airport", "flughafen", "flights", "flüge", "airline", "airlines", "lufthansa", "eurowings", "condor",
-             "cockpit", "hockey", "eishockey", "coral", "reef",
-             # research and science articles: about storms in general, not a storm hitting ships now
-             "modeling", "modelling", "model", "models", "study", "studies", "research", "researchers",
-             "scientists", "studie", "forscher",
-             # beaches and tourism: storm news that doesn't affect ships
-             "beach", "beaches", "tourists", "holiday", "strand", "urlaub", "touristen", "badegäste"]
+             "cockpit", "hockey", "eishockey", "coral", "reef"]
+
+# Background stories: research about storms, or storms hitting beaches and tourists. These words only
+# drop a headline when it names no ship, port or dock ("Containers wash up on beach" is still kept).
+BACKGROUND_STORY = ["modeling", "modelling", "model", "models", "study", "studies", "research", "researchers",
+                    "scientists", "studie", "forscher",
+                    "beach", "beaches", "tourists", "holiday", "strand", "urlaub", "touristen", "badegäste"]
 
 USER_AGENT = "HamburgArrivalRiskMonitor/1.0 (+https://github.com/zahidrockstar88-byte/hamburg-arrival-risk)"
 TIMEOUT_SECONDS = 10
@@ -151,6 +152,9 @@ def classify(title: str) -> dict | None:
     lowered = title.lower()
     if _mentions(lowered, OFF_TOPIC):
         return None
+    names_ships = _mentions(lowered, SHIPPING_CONTEXT)
+    if _mentions(lowered, BACKGROUND_STORY) and not names_ships:
+        return None                                    # e.g. a science article about North Sea storms
     place = next((name for name, (_, words) in PLACES.items() if _mentions(lowered, words)), None)
     if place is None:
         return None
@@ -159,7 +163,7 @@ def classify(title: str) -> dict | None:
         return None                                    # e.g. "Hamburg port reports record year": not a disruption
     conflict_news = place in CONFLICT_PLACES and kind == "Conflict / security"
     weather_at_sea = place in SEA_PLACES and kind == "Weather"      # e.g. "North Sea storm warning"
-    about_shipping = _mentions(lowered, MARITIME_PLACE_WORDS) or _mentions(lowered, SHIPPING_CONTEXT)
+    about_shipping = names_ships or _mentions(lowered, MARITIME_PLACE_WORDS)
     if not (conflict_news or weather_at_sea or about_shipping):
         return None                                    # e.g. "Elbe flood hits Dresden": not about ships
     if kind == "Strike" and not _mentions(lowered, STRIKE_CONTEXT):

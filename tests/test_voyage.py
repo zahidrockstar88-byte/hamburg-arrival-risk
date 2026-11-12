@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from voyage import compare_routes, slower_by, voyage_emissions  # noqa: E402
+from voyage import clean_asia_routes, compare_routes, red_sea_closed_by_region, slower_by, voyage_emissions  # noqa: E402
 
 
 def test_one_day_at_sea_worked_example():
@@ -86,3 +86,33 @@ def test_money_saved_by_sailing_slower_worked_example():
 
 def test_cannot_slow_down_more_than_the_ship_is_going():
     assert slower_by(13000, speed_kn=10, distance_nm=1000, knots_slower=10, eu_share=0.5) is None
+
+
+def test_red_sea_closed_by_region_worked_example():
+    # 13,000 TEU at 18 kn = 432 nm a day. Region A: detours of 3,240 nm (7.5 days) and 4,320 nm (10 days).
+    # Region B: one port, 2,160 nm (5 days). Extra cost per voyage = extra fuel + EU ETS + charter - Suez toll saved:
+    #   7.5 days: $442,731-724,287 (worked out in the Cape detour test above).
+    #   10 days:  1,090 t x $670 + 3,434.6 t CO2 x $33 + 10 x $70,000 - $715,000 = $828,641 (low);
+    #             1,470 t x $730 + 4,632.0 t CO2 x $49.5 + 10 x $105,000 - $1,040,000 = $1,312,383 (high).
+    #   5 days:   545 t x $670 + 1,717.3 t x $33 + $350,000 - $715,000 = $56,821;
+    #             735 t x $730 + 2,316.0 t x $49.5 + $525,000 - $1,040,000 = $136,191.
+    routes = {"P1": {"region": "A", "suez_nm": 10800, "cape_nm": 14040},
+              "P2": {"region": "A", "suez_nm": 10000, "cape_nm": 14320},
+              "P3": {"region": "B", "suez_nm": 9000, "cape_nm": 11160}}
+    regions = red_sea_closed_by_region(routes, teu=13000, speed_kn=18)
+    assert [round(d, 1) for d in regions["A"]["days"]] == [7.5, 10.0]
+    assert [round(d, 1) for d in regions["B"]["days"]] == [5.0, 5.0]
+    assert [round(x) for x in regions["A"]["cost_usd"]] == [442731, 1312383]   # cheapest low, dearest high
+    assert [round(x) for x in regions["B"]["cost_usd"]] == [56821, 136191]
+
+
+def test_route_table_rows_that_make_no_sense_are_skipped():
+    saved = {"routes": {
+        "Good": {"region": "East Asia", "suez_nm": 10500, "cape_nm": 13800},
+        "Cape shorter": {"region": "East Asia", "suez_nm": 13800, "cape_nm": 10500},   # impossible
+        "Too far": {"region": "East Asia", "suez_nm": 10500, "cape_nm": 99999},
+        "Text": {"region": "East Asia", "suez_nm": "10500", "cape_nm": 13800},
+        "Missing": {"region": "East Asia"},
+        "Not a row": "10500"}}
+    assert clean_asia_routes(saved) == {"Good": {"region": "East Asia", "suez_nm": 10500, "cape_nm": 13800}}
+    assert clean_asia_routes(["not", "a", "table"]) == {}

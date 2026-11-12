@@ -99,9 +99,9 @@ keeps every version, so I rebuild which ships were at sea and when they really a
 learns how far off the calculated ETA usually is. I test it with 'leave one ship out': each ship is predicted
 by a model that never saw it. At first it was *not* better than the plain calculation (about 9 h average error
 for both), because it learned from the wrong moment: the first sighting near Hamburg instead of berthing. Once I
-defined arrival as 'moored at the berth' everywhere, it beat the calculation (about 6.8 h against 7.7 h on 32
-ships, Nov 2026). It's still labelled experimental, the calculated ETA stays the main number, and it retrains after
-every collection. Companies like project44 and Kpler use years of history; this shows I understand the method and
+defined arrival as 'moored at the berth' everywhere, it beat the calculation (6.6 h against 8.3 h on 37 ships
+when I last checked, 12 Nov 2026; the dashboard always shows the latest figures, because it retrains after every
+collection). It's still labelled experimental and the calculated ETA stays the main number. Companies like project44 and Kpler use years of history; this shows I understand the method and
 its limits."
 
 **"Where does the news come from?"**
@@ -153,8 +153,8 @@ and they match published Shanghai–Rotterdam figures to within 0.4 % (I first f
 so ships from Japan "went around Africa" via Panama; a code review caught it). For each route it shows days, fuel, CO2, the
 EU ETS cost (50 % of emissions for voyages into the EU), ship time and the Suez toll, plus a 'Red Sea closed'
 switch and how many extra ships a weekly service needs. From Shanghai the Cape adds about 3,240 nm and 8.4 days
-at 16 knots; from India, Pakistan and the Gulf about 4,400-4,700 nm and 11-12 days, because they sit right next to
-the Red Sea. I also show that sailing 2 knots slower cuts fuel and CO2 by about a fifth, because fuel per mile grows with
+at 16 knots; from west India (Mumbai, Mundra), Pakistan and the Gulf about 4,400-4,700 nm and 11.5-12.3 days,
+because they sit right next to the Red Sea (east India and Bangladesh, e.g. Chennai, about 3,600 nm and 9.5 days). I also show that sailing 2 knots slower cuts fuel and CO2 by about a fifth, because fuel per mile grows with
 the square of speed."
 
 **"How accurate is the shipping-line score?"**

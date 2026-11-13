@@ -99,8 +99,8 @@ keeps every version, so I rebuild which ships were at sea and when they really a
 learns how far off the calculated ETA usually is. I test it with 'leave one ship out': each ship is predicted
 by a model that never saw it. At first it was *not* better than the plain calculation (about 9 h average error
 for both), because it learned from the wrong moment: the first sighting near Hamburg instead of berthing. Once I
-defined arrival as 'moored at the berth' everywhere, it beat the calculation (6.6 h against 8.3 h on 37 ships
-when I last checked, 12 Nov 2026; the dashboard always shows the latest figures, because it retrains after every
+defined arrival as 'moored at the berth' everywhere, it beat the calculation (6.6 h against 9.1 h on 49 ships
+when I last checked, 13 Nov 2026; the dashboard always shows the latest figures, because it retrains after every
 collection). It's still labelled experimental and the calculated ETA stays the main number. Companies like project44 and Kpler use years of history; this shows I understand the method and
 its limits."
 

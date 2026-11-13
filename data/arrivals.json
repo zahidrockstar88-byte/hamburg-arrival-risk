@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-12T20:21:28+00:00",
+ "updated_utc": "2026-11-13T02:11:07+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -288,6 +288,33 @@
    "promised_eta": "2026-11-10T07:00:00+00:00",
    "arrived_after": "2026-11-11T23:44:38+00:00",
    "arrived_by": "2026-11-12T20:20:33+00:00"
+  },
+  {
+   "mmsi": "255916084",
+   "ship": "BALTIC TRANSPORT",
+   "line": "Line unknown",
+   "first_seen": "2026-11-12T11:37:49+00:00",
+   "promised_eta": "2026-11-13T02:00:00+00:00",
+   "arrived_after": "2026-11-12T20:20:38+00:00",
+   "arrived_by": "2026-11-13T01:56:17+00:00"
+  },
+  {
+   "mmsi": "275511000",
+   "ship": "CAPELLA",
+   "line": "Line unknown",
+   "first_seen": "2026-11-11T14:22:54+00:00",
+   "promised_eta": "2026-11-12T21:00:00+00:00",
+   "arrived_after": "2026-11-12T20:15:34+00:00",
+   "arrived_by": "2026-11-13T01:56:31+00:00"
+  },
+  {
+   "mmsi": "255917401",
+   "ship": "BREB BOTHNIA",
+   "line": "Line unknown",
+   "first_seen": "2026-11-11T14:25:12+00:00",
+   "promised_eta": "2026-11-12T15:00:00+00:00",
+   "arrived_after": "2026-11-12T20:18:08+00:00",
+   "arrived_by": "2026-11-13T02:10:40+00:00"
   }
  ]
 }

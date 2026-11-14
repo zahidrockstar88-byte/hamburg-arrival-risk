@@ -1,13 +1,13 @@
 {
- "trained_utc": "2026-11-13T20:06:26+00:00",
- "snapshots": 17,
- "examples": 122,
- "ships": 51,
+ "trained_utc": "2026-11-14T01:44:40+00:00",
+ "snapshots": 18,
+ "examples": 129,
+ "ships": 53,
  "coefficients": [
-  1.0564254373080268,
-  8.806112613576163,
-  5.153363954297076
+  1.0214386974810608,
+  9.920235132084455,
+  5.529598715093876
  ],
- "model_mae_h": 6.6,
- "calculated_mae_h": 8.9
+ "model_mae_h": 6.5,
+ "calculated_mae_h": 9.3
 }

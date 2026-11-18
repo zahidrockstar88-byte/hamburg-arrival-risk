@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-18T01:16:59+00:00",
+ "updated_utc": "2026-11-18T12:10:35+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -666,6 +666,51 @@
    "promised_eta": "2026-11-17T14:00:00+00:00",
    "arrived_after": "2026-11-17T04:06:56+00:00",
    "arrived_by": "2026-11-18T01:16:05+00:00"
+  },
+  {
+   "mmsi": "636023310",
+   "ship": "ONE INTELLIGENCE",
+   "line": "Ocean Network Express (ONE)",
+   "first_seen": "2026-11-17T16:28:39+00:00",
+   "promised_eta": "2026-11-18T01:00:00+00:00",
+   "arrived_after": "2026-11-17T16:28:39+00:00",
+   "arrived_by": "2026-11-18T12:05:04+00:00"
+  },
+  {
+   "mmsi": "477103800",
+   "ship": "OOCL UNITED KINGDOM",
+   "line": "OOCL (COSCO group)",
+   "first_seen": "2026-11-10T17:21:11+00:00",
+   "promised_eta": "2026-11-16T01:00:00+00:00",
+   "arrived_after": "2026-11-16T06:51:11+00:00",
+   "arrived_by": "2026-11-18T12:05:38+00:00"
+  },
+  {
+   "mmsi": "304707000",
+   "ship": "EMS LION",
+   "line": "Line unknown",
+   "first_seen": "2026-11-16T19:53:43+00:00",
+   "promised_eta": "2026-11-18T08:00:00+00:00",
+   "arrived_after": "2026-11-18T01:16:53+00:00",
+   "arrived_by": "2026-11-18T12:05:59+00:00"
+  },
+  {
+   "mmsi": "215134000",
+   "ship": "CMA CGM GEMINI",
+   "line": "CMA CGM",
+   "first_seen": "2026-11-08T23:43:52+00:00",
+   "promised_eta": "2026-11-07T08:45:00+00:00",
+   "arrived_after": "2026-11-17T16:24:04+00:00",
+   "arrived_by": "2026-11-18T12:07:48+00:00"
+  },
+  {
+   "mmsi": "538010949",
+   "ship": "EVONA",
+   "line": "Line unknown",
+   "first_seen": "2026-11-15T23:02:33+00:00",
+   "promised_eta": "2026-11-17T14:00:00+00:00",
+   "arrived_after": "2026-11-17T16:19:51+00:00",
+   "arrived_by": "2026-11-18T12:08:05+00:00"
   }
  ]
 }

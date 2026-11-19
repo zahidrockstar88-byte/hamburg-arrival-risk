@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-19T12:08:21+00:00",
+ "updated_utc": "2026-11-19T21:02:17+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -756,6 +756,24 @@
    "promised_eta": "2026-11-18T22:00:00+00:00",
    "arrived_after": "2026-11-19T02:48:28+00:00",
    "arrived_by": "2026-11-19T12:04:01+00:00"
+  },
+  {
+   "mmsi": "636093160",
+   "ship": "AL SAFAT",
+   "line": "Line unknown",
+   "first_seen": "2026-11-17T04:01:18+00:00",
+   "promised_eta": "2026-11-18T14:30:00+00:00",
+   "arrived_after": "2026-11-19T02:52:40+00:00",
+   "arrived_by": "2026-11-19T21:00:15+00:00"
+  },
+  {
+   "mmsi": "211588220",
+   "ship": "CASTOR",
+   "line": "Line unknown",
+   "first_seen": "2026-11-18T20:53:53+00:00",
+   "promised_eta": null,
+   "arrived_after": "2026-11-19T12:06:53+00:00",
+   "arrived_by": "2026-11-19T21:00:22+00:00"
   }
  ]
 }

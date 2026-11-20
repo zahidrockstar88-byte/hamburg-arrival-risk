@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-20T02:39:50+00:00",
+ "updated_utc": "2026-11-20T12:08:39+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -819,6 +819,42 @@
    "promised_eta": "2026-11-19T17:00:00+00:00",
    "arrived_after": "2026-11-19T20:57:43+00:00",
    "arrived_by": "2026-11-20T02:37:22+00:00"
+  },
+  {
+   "mmsi": "538010071",
+   "ship": "HONORSHIP",
+   "line": "Line unknown",
+   "first_seen": "2026-11-13T11:20:24+00:00",
+   "promised_eta": "2026-11-15T00:01:00+00:00",
+   "arrived_after": "2026-11-20T02:35:18+00:00",
+   "arrived_by": "2026-11-20T11:54:01+00:00"
+  },
+  {
+   "mmsi": "304021000",
+   "ship": "HELENE-B",
+   "line": "Line unknown",
+   "first_seen": "2026-11-15T07:02:03+00:00",
+   "promised_eta": "2026-11-18T12:00:00+00:00",
+   "arrived_after": "2026-11-19T02:50:34+00:00",
+   "arrived_by": "2026-11-20T11:59:08+00:00"
+  },
+  {
+   "mmsi": "477154700",
+   "ship": "COSCO GEMINI",
+   "line": "COSCO Shipping",
+   "first_seen": "2026-11-17T04:13:50+00:00",
+   "promised_eta": "2026-11-19T16:00:00+00:00",
+   "arrived_after": "2026-11-19T20:59:46+00:00",
+   "arrived_by": "2026-11-20T11:59:37+00:00"
+  },
+  {
+   "mmsi": "228401800",
+   "ship": "CMA CGM CONCORDE",
+   "line": "CMA CGM",
+   "first_seen": "2026-11-17T04:11:45+00:00",
+   "promised_eta": "2026-11-18T13:00:00+00:00",
+   "arrived_after": "2026-11-19T21:01:20+00:00",
+   "arrived_by": "2026-11-20T12:05:03+00:00"
   }
  ]
 }

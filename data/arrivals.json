@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-22T11:54:28+00:00",
+ "updated_utc": "2026-11-22T20:05:34+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -954,6 +954,24 @@
    "promised_eta": "2026-11-21T09:00:00+00:00",
    "arrived_after": "2026-11-21T19:41:17+00:00",
    "arrived_by": "2026-11-22T11:51:38+00:00"
+  },
+  {
+   "mmsi": "219019094",
+   "ship": "MARIBO MAERSK",
+   "line": "Maersk",
+   "first_seen": "2026-11-19T02:54:08+00:00",
+   "promised_eta": "2026-11-18T01:30:00+00:00",
+   "arrived_after": "2026-11-22T11:54:02+00:00",
+   "arrived_by": "2026-11-22T20:02:22+00:00"
+  },
+  {
+   "mmsi": "211191520",
+   "ship": "MERCATOR",
+   "line": "Line unknown",
+   "first_seen": "2026-11-22T11:47:48+00:00",
+   "promised_eta": null,
+   "arrived_after": "2026-11-22T11:47:48+00:00",
+   "arrived_by": "2026-11-22T20:03:17+00:00"
   }
  ]
 }

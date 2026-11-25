@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-24T14:12:08+00:00",
+ "updated_utc": "2026-11-25T00:12:05+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -1035,6 +1035,42 @@
    "promised_eta": "2026-11-23T00:00:00+00:00",
    "arrived_after": "2026-11-24T02:32:23+00:00",
    "arrived_by": "2026-11-24T14:05:39+00:00"
+  },
+  {
+   "mmsi": "229921000",
+   "ship": "CMA CGM DOLPHIN",
+   "line": "CMA CGM",
+   "first_seen": "2026-11-23T13:24:08+00:00",
+   "promised_eta": "2026-11-24T05:00:00+00:00",
+   "arrived_after": "2026-11-24T02:27:46+00:00",
+   "arrived_by": "2026-11-25T00:04:09+00:00"
+  },
+  {
+   "mmsi": "440487000",
+   "ship": "HMM COPENHAGEN",
+   "line": "HMM",
+   "first_seen": "2026-11-16T19:55:32+00:00",
+   "promised_eta": "2026-11-18T05:00:00+00:00",
+   "arrived_after": "2026-11-24T14:02:40+00:00",
+   "arrived_by": "2026-11-25T00:04:50+00:00"
+  },
+  {
+   "mmsi": "636021386",
+   "ship": "ASANAGI",
+   "line": "Line unknown",
+   "first_seen": "2026-11-23T02:01:24+00:00",
+   "promised_eta": "2026-11-24T03:00:00+00:00",
+   "arrived_after": "2026-11-24T14:10:58+00:00",
+   "arrived_by": "2026-11-25T00:07:27+00:00"
+  },
+  {
+   "mmsi": "477883300",
+   "ship": "OOCL KOBE",
+   "line": "OOCL (COSCO group)",
+   "first_seen": "2026-11-24T02:33:15+00:00",
+   "promised_eta": "2026-11-23T22:00:00+00:00",
+   "arrived_after": "2026-11-24T02:33:15+00:00",
+   "arrived_by": "2026-11-25T00:08:36+00:00"
   }
  ]
 }

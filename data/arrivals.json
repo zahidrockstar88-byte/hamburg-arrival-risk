@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-26T03:54:03+00:00",
+ "updated_utc": "2026-11-26T17:19:17+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -1134,6 +1134,33 @@
    "promised_eta": "2026-11-26T02:00:00+00:00",
    "arrived_after": "2026-11-25T09:03:00+00:00",
    "arrived_by": "2026-11-26T03:50:03+00:00"
+  },
+  {
+   "mmsi": "309901000",
+   "ship": "MOL CELEBRATION",
+   "line": "Line unknown",
+   "first_seen": "2026-11-19T20:58:41+00:00",
+   "promised_eta": "2026-11-20T06:00:00+00:00",
+   "arrived_after": "2026-11-26T03:53:17+00:00",
+   "arrived_by": "2026-11-26T17:05:28+00:00"
+  },
+  {
+   "mmsi": "636093172",
+   "ship": "ALULA EXPRESS",
+   "line": "Hapag-Lloyd",
+   "first_seen": "2026-11-25T00:01:06+00:00",
+   "promised_eta": "2026-11-25T08:00:00+00:00",
+   "arrived_after": "2026-11-26T03:44:27+00:00",
+   "arrived_by": "2026-11-26T17:16:53+00:00"
+  },
+  {
+   "mmsi": "255915673",
+   "ship": "HAV SARDIS",
+   "line": "Line unknown",
+   "first_seen": "2026-11-25T00:07:42+00:00",
+   "promised_eta": "2026-11-26T22:00:00+00:00",
+   "arrived_after": "2026-11-26T03:52:40+00:00",
+   "arrived_by": "2026-11-26T17:19:01+00:00"
   }
  ]
 }

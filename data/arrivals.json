@@ -1,5 +1,5 @@
 {
- "updated_utc": "2026-11-27T12:59:27+00:00",
+ "updated_utc": "2026-11-27T23:46:54+00:00",
  "arrivals": [
   {
    "mmsi": "305299000",
@@ -1170,6 +1170,51 @@
    "promised_eta": "2026-11-25T22:00:00+00:00",
    "arrived_after": "2026-11-26T03:53:17+00:00",
    "arrived_by": "2026-11-27T01:57:12+00:00"
+  },
+  {
+   "mmsi": "636093154",
+   "ship": "NINGBO EXPRESS",
+   "line": "Hapag-Lloyd",
+   "first_seen": "2026-11-24T14:04:02+00:00",
+   "promised_eta": "2026-11-26T22:00:00+00:00",
+   "arrived_after": "2026-11-26T17:16:42+00:00",
+   "arrived_by": "2026-11-27T23:34:45+00:00"
+  },
+  {
+   "mmsi": "355351000",
+   "ship": "MALACCA HIGHWAY",
+   "line": "Line unknown",
+   "first_seen": "2026-11-27T02:01:09+00:00",
+   "promised_eta": "2026-11-27T18:00:00+00:00",
+   "arrived_after": "2026-11-27T12:57:59+00:00",
+   "arrived_by": "2026-11-27T23:39:27+00:00"
+  },
+  {
+   "mmsi": "477321000",
+   "ship": "OOCL MONTREAL",
+   "line": "OOCL (COSCO group)",
+   "first_seen": "2026-11-20T20:32:52+00:00",
+   "promised_eta": "2026-11-25T13:00:00+00:00",
+   "arrived_after": "2026-11-27T12:54:18+00:00",
+   "arrived_by": "2026-11-27T23:42:01+00:00"
+  },
+  {
+   "mmsi": "636093197",
+   "ship": "SCI DELHI",
+   "line": "Line unknown",
+   "first_seen": "2026-11-24T14:09:42+00:00",
+   "promised_eta": "2026-11-25T14:00:00+00:00",
+   "arrived_after": "2026-11-27T12:55:55+00:00",
+   "arrived_by": "2026-11-27T23:43:22+00:00"
+  },
+  {
+   "mmsi": "211590310",
+   "ship": "LOEWE",
+   "line": "Line unknown",
+   "first_seen": "2026-11-11T21:00:17+00:00",
+   "promised_eta": "2027-06-04T18:00:00+00:00",
+   "arrived_after": "2026-11-27T12:52:49+00:00",
+   "arrived_by": "2026-11-27T23:46:36+00:00"
   }
  ]
 }
